@@ -20,10 +20,12 @@ service cloud.firestore {
     match /invites/{code} {
       // Solo get (nunca list): el código inguessable es la credencial
       allow get: if signedIn();
+      // getAfter: el invite se crea en el mismo batch que el hogar, así que
+      // hay que validar contra el estado POSTERIOR al batch
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
         && request.auth.uid in
-           get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.members;
+           getAfter(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.members;
     }
 
     match /households/{hid} {
@@ -83,9 +85,11 @@ service cloud.firestore {
           && request.resource.data.redeemedBy == request.auth.uid;
       }
 
-      // Resto de las subcolecciones del hogar: lectura/escritura de miembros
+      // Resto de las subcolecciones del hogar: lectura/escritura de miembros.
+      // redemptions se excluye: los match superpuestos se combinan con OR y
+      // este catch-all anularía su inmutabilidad.
       match /{sub}/{doc} {
-        allow read, write: if isMember(hid);
+        allow read, write: if sub != 'redemptions' && isMember(hid);
       }
     }
   }

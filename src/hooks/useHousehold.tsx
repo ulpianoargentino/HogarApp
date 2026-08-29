@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -103,7 +104,8 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       createdBy: uid,
       createdAt: serverTimestamp(),
     })
-    batch.update(doc(db, 'users', uid), { householdId: householdRef.id })
+    // set+merge: el doc de usuario puede estar todavía creándose
+    batch.set(doc(db, 'users', uid), { householdId: householdRef.id }, { merge: true })
     await batch.commit()
   }
 
@@ -118,24 +120,22 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       name: user!.displayName ?? 'Sin nombre',
       photoURL: user!.photoURL ?? null,
     }
-    const householdSnap = await getDoc(doc(db, 'households', targetHid))
-    if (!householdSnap.exists()) throw new Error('Ese hogar ya no existe.')
-    const data = householdSnap.data() as Omit<Household, 'id'>
-    if (data.members.includes(uid)) {
-      await setDoc(doc(db, 'users', uid), { householdId: targetHid }, { merge: true })
-      return
-    }
-    if (data.members.length >= 2) {
-      throw new Error('Ese hogar ya tiene dos personas.')
-    }
+    // No se puede leer el hogar antes de ser miembro: el join va "a ciegas"
+    // con arrayUnion y las reglas validan que seamos exactamente el 2.º.
     const batch = writeBatch(db)
     batch.update(doc(db, 'households', targetHid), {
-      members: [...data.members, uid],
+      members: arrayUnion(uid),
       [`memberProfiles.${uid}`]: profile,
       [`points.${uid}`]: 0,
     })
-    batch.update(doc(db, 'users', uid), { householdId: targetHid })
-    await batch.commit()
+    batch.set(doc(db, 'users', uid), { householdId: targetHid }, { merge: true })
+    try {
+      await batch.commit()
+    } catch {
+      throw new Error(
+        'No pudimos unirte: ese hogar ya tiene dos personas o el código no es válido.',
+      )
+    }
   }
 
   const value = useMemo<HouseholdContextValue>(() => {

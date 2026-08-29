@@ -8,6 +8,7 @@ import {
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithPopup,
   signInWithRedirect,
   signOut as fbSignOut,
   type User,
@@ -35,8 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signInWithGoogle() {
-    // Redirect (no popup): es lo único confiable en una PWA standalone de iOS.
-    await signInWithRedirect(auth, new GoogleAuthProvider())
+    const provider = new GoogleAuthProvider()
+    if (import.meta.env.VITE_USE_EMULATORS === '1') {
+      // Con emuladores el flujo de redirect no resuelve (necesita el iframe
+      // del authDomain real); popup anda perfecto en dev.
+      await signInWithPopup(auth, provider)
+    } else {
+      // Redirect (no popup): es lo único confiable en una PWA standalone de iOS.
+      await signInWithRedirect(auth, provider)
+    }
   }
 
   async function signOut() {

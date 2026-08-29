@@ -1,5 +1,10 @@
 import { initializeApp } from 'firebase/app'
-import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import {
+  connectAuthEmulator,
+  getAuth,
+  GoogleAuthProvider,
+  signInWithCredential,
+} from 'firebase/auth'
 import {
   connectFirestoreEmulator,
   initializeFirestore,
@@ -26,4 +31,13 @@ export const db = initializeFirestore(app, {
 if (import.meta.env.VITE_USE_EMULATORS === '1') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  // Helper para tests E2E: el emulador de Auth acepta credenciales con claims
+  // falsos, así el login no depende de ningún servicio externo.
+  interface TestClaims {
+    sub: string
+    email: string
+    name?: string
+  }
+  ;(window as unknown as Record<string, unknown>).__testSignIn = (claims: TestClaims) =>
+    signInWithCredential(auth, GoogleAuthProvider.credential(JSON.stringify(claims)))
 }
