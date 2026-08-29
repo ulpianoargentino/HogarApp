@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run --exclude \"**/rules.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "test:rules": "firebase emulators:exec --only firestore --project hogarapp-rules-test \"vitest run src/rules.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project hogarapp-rules-test \"vitest run src/rules.test.ts\"",
+    "build:demo": "vite build -c vite.demo.config.ts"
   },
   "repository": {
     "type": "git",
@@ -38,6 +39,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.11"
   },
   "private": true,
