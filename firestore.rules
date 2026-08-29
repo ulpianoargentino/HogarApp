@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(hid) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/households/$(hid)).data.members;
+    }
+
+    match /users/{uid} {
+      // La pareja necesita poder leer el perfil del otro
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /invites/{code} {
+      // Solo get (nunca list): el código inguessable es la credencial
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.auth.uid in
+           get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.members;
+    }
+
+    match /households/{hid} {
+
+      function isJoin() {
+        // Un no-miembro se agrega EXACTAMENTE a sí mismo como 2.º integrante
+        return !(request.auth.uid in resource.data.members)
+          && resource.data.members.size() == 1
+          && request.resource.data.members ==
+             resource.data.members.concat([request.auth.uid])
+          && request.resource.data.points[request.auth.uid] == 0
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['members', 'memberProfiles', 'points']);
+      }
+
+      function otherUid() {
+        return resource.data.members[0] == request.auth.uid
+          ? resource.data.members[1]
+          : resource.data.members[0];
+      }
+
+      function otherBalanceUnchanged() {
+        return resource.data.members.size() == 1
+          || request.resource.data.points[otherUid()] == resource.data.points[otherUid()];
+      }
+
+      function pointsDeltaOk() {
+        // Solo el balance propio, sumas de hasta +50 (tareas) o restas (canjes),
+        // nunca por debajo de cero, el del otro intocable.
+        let mine = request.resource.data.points[request.auth.uid]
+                 - resource.data.points[request.auth.uid];
+        return mine <= 50
+          && request.resource.data.points[request.auth.uid] >= 0
+          && otherBalanceUnchanged();
+      }
+
+      function isMemberEdit() {
+        return request.auth.uid in resource.data.members
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'points', 'memberProfiles'])
+          && pointsDeltaOk();
+      }
+
+      allow get: if signedIn() && request.auth.uid in resource.data.members;
+
+      allow create: if signedIn()
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.points[request.auth.uid] == 0;
+
+      allow update: if signedIn() && (isJoin() || isMemberEdit());
+
+      // Historial de canjes: solo lectura y alta propia, nunca editar/borrar
+      match /redemptions/{id} {
+        allow read: if isMember(hid);
+        allow create: if isMember(hid)
+          && request.resource.data.redeemedBy == request.auth.uid;
+      }
+
+      // Resto de las subcolecciones del hogar: lectura/escritura de miembros
+      match /{sub}/{doc} {
+        allow read, write: if isMember(hid);
+      }
+    }
+  }
+}

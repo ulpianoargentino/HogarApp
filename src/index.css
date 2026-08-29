@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* Paleta estilo iOS: claro por defecto, oscuro automático según el sistema */
+:root {
+  color-scheme: light dark;
+  --c-bg: #f2f2f7;
+  --c-card: #ffffff;
+  --c-card2: #f7f7fa;
+  --c-ink: #111114;
+  --c-ink2: #6e6e73;
+  --c-line: #e3e3e8;
+  --c-accent: #007aff;
+  --c-accent-soft: #e5f1ff;
+  --c-danger: #e03131;
+  --c-warn: #b45309;
+  --c-warn-soft: #fef3c7;
+  --c-ok: #16a34a;
+  --c-love: #e64980;
+  --c-love-soft: #ffe9f0;
+  --c-gold: #b8860b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: #000000;
+    --c-card: #1c1c1e;
+    --c-card2: #2a2a2d;
+    --c-ink: #f2f2f7;
+    --c-ink2: #98989f;
+    --c-line: #33333a;
+    --c-accent: #0a84ff;
+    --c-accent-soft: #0e2c4d;
+    --c-danger: #ff6b6b;
+    --c-warn: #fbbf24;
+    --c-warn-soft: #3c2f0a;
+    --c-ok: #4ade80;
+    --c-love: #ff8fb3;
+    --c-love-soft: #46101f;
+    --c-gold: #f0c14b;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-card: var(--c-card);
+  --color-card2: var(--c-card2);
+  --color-ink: var(--c-ink);
+  --color-ink2: var(--c-ink2);
+  --color-line: var(--c-line);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-danger: var(--c-danger);
+  --color-warn: var(--c-warn);
+  --color-warn-soft: var(--c-warn-soft);
+  --color-ok: var(--c-ok);
+  --color-love: var(--c-love);
+  --color-love-soft: var(--c-love-soft);
+  --color-gold: var(--c-gold);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* 16px mínimo en inputs: evita el auto-zoom de Safari al enfocar */
+input,
+select,
+textarea,
+button {
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+/* Utilidades de safe-area (notch / home indicator) */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
