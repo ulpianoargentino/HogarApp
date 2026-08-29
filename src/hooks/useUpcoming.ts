@@ -1,3 +1,5 @@
+import { addDaysISO, diffDays, todayISO } from '../lib/dates'
+import { occurrencesBetween } from '../lib/recurrence'
 import type { HouseholdEvent, Warranty } from '../types'
 
 export interface UpcomingItem {
@@ -20,14 +22,48 @@ export interface Upcoming {
   badgeCount: number
 }
 
-/**
- * Deriva "Próximos" de eventos + garantías ya suscriptos.
- * Implementación real en la fase de Calendario (fase 3C) — este stub
- * fija el contrato para que el shell compile mientras tanto.
- */
+/** Deriva "Próximos" de eventos + garantías ya suscriptos. */
 export function computeUpcoming(
-  _events: HouseholdEvent[],
-  _warranties: Warranty[],
+  events: HouseholdEvent[],
+  warranties: Warranty[],
 ): Upcoming {
-  return { items: [], badgeCount: 0 }
+  const today = todayISO()
+  const windowEnd = addDaysISO(today, 14)
+  const items: UpcomingItem[] = []
+
+  for (const event of events) {
+    for (const date of occurrencesBetween(event, today, windowEnd)) {
+      if (event.doneDates?.includes(date)) continue
+      items.push({
+        sourceId: event.id,
+        kind: 'evento',
+        title: event.title,
+        date,
+        type: event.type,
+        urgent: diffDays(today, date) <= event.remindDaysBefore,
+        event,
+      })
+    }
+  }
+
+  for (const warranty of warranties) {
+    const date = warranty.expiresAt
+    if (date < today || date > windowEnd) continue
+    items.push({
+      sourceId: warranty.id,
+      kind: 'garantia',
+      title: `Vence garantía: ${warranty.item}`,
+      date,
+      type: 'garantia',
+      urgent: diffDays(today, date) <= 7,
+      event: null,
+    })
+  }
+
+  items.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1
+    return Number(b.urgent) - Number(a.urgent)
+  })
+
+  return { items, badgeCount: items.filter((i) => i.urgent).length }
 }
