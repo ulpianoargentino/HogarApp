@@ -1,49 +1,84 @@
 import { useEffect, useState } from 'react'
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore'
 import { db } from '../../lib/firebase'
-import { Field, FormSheet, inputClass } from '../../components/ui'
+import { Field, FormSheet, GhostButton, inputClass } from '../../components/ui'
 import { useHome } from '../../hooks/useHousehold'
+import type { Reward } from '../../types'
+
+const DEFAULT_COST = '30'
 
 export default function RewardFormSheet({
   open,
   onClose,
+  editing,
 }: {
   open: boolean
   onClose: () => void
+  /** Premio a editar; null = alta */
+  editing: Reward | null
 }) {
   const { hid, uid } = useHome()
   const [title, setTitle] = useState('')
-  const [cost, setCost] = useState('30')
+  const [cost, setCost] = useState(DEFAULT_COST)
 
-  // Resetear el formulario cada vez que se abre
+  // Precargar (edición) o resetear (alta) cada vez que se abre
   useEffect(() => {
     if (open) {
-      setTitle('')
-      setCost('30')
+      setTitle(editing?.title ?? '')
+      setCost(editing ? String(editing.cost) : DEFAULT_COST)
     }
-  }, [open])
+  }, [open, editing])
 
   const costNumber = Number(cost)
   const costOk = Number.isInteger(costNumber) && costNumber > 0
 
   async function handleSubmit() {
-    await addDoc(collection(db, 'households', hid, 'rewards'), {
-      title: title.trim(),
-      cost: costNumber,
-      active: true,
-      createdBy: uid,
-      createdAt: serverTimestamp(),
-    })
+    const data = { title: title.trim(), cost: costNumber }
+    if (editing) {
+      await updateDoc(doc(db, 'households', hid, 'rewards', editing.id), data)
+    } else {
+      await addDoc(collection(db, 'households', hid, 'rewards'), {
+        ...data,
+        active: true,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+      })
+    }
+  }
+
+  async function handleDelete() {
+    if (!editing) return
+    if (!window.confirm(`¿Borrar el premio «${editing.title}»?`)) return
+    try {
+      await deleteDoc(doc(db, 'households', hid, 'rewards', editing.id))
+      onClose()
+    } catch {
+      alert('No se pudo borrar. Probá de nuevo.')
+    }
   }
 
   return (
     <FormSheet
       open={open}
       onClose={onClose}
-      title="Nuevo premio"
+      title={editing ? 'Editar premio' : 'Nuevo premio'}
       onSubmit={handleSubmit}
-      submitLabel="Agregar premio"
+      submitLabel={editing ? 'Guardar cambios' : 'Agregar premio'}
       canSubmit={title.trim().length > 0 && costOk}
+      footer={
+        editing ? (
+          <GhostButton tone="danger" onClick={handleDelete}>
+            Eliminar premio
+          </GhostButton>
+        ) : undefined
+      }
     >
       <Field label="Título">
         <input
@@ -63,7 +98,7 @@ export default function RewardFormSheet({
           step={1}
           value={cost}
           onChange={(e) => setCost(e.target.value)}
-          className={inputClass}
+          className={`${inputClass} tabular font-display text-lg font-bold`}
         />
       </Field>
     </FormSheet>

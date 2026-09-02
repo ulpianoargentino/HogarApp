@@ -1,48 +1,63 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import {
   Card,
+  Checkbox,
   EmptyState,
   FAB,
+  IconButton,
   ListRow,
   PageHeader,
   SectionTitle,
-  SegmentedControl,
 } from '../../components/ui'
-import {
-  IconCheckCircle,
-  IconHeart,
-  IconMap,
-  IconTrash,
-  IconTv,
-} from '../../components/icons'
+import { IconFilm, IconPlane, IconSparkle, IconTrash } from '../../components/icons'
 import { useHome } from '../../hooks/useHousehold'
 import { useCollection } from '../../hooks/useCollection'
 import type { CouplePlan, PlanKind } from '../../types'
 import PlanFormSheet from './PlanFormSheet'
 
-const EMPTY: Record<PlanKind, { icon: typeof IconHeart; title: string; hint: string }> = {
+const COPY: Record<
+  PlanKind,
+  {
+    title: string
+    subtitle: string
+    icon: typeof IconSparkle
+    fab: string
+    emptyTitle: string
+    emptyHint: string
+  }
+> = {
   plan: {
-    icon: IconHeart,
-    title: 'Todavía no hay planes…',
-    hint: '¿Proponés el primero? El + te espera.',
+    title: 'Planes',
+    subtitle: 'Ideas para hacer juntos',
+    icon: IconSparkle,
+    fab: 'Nuevo plan',
+    emptyTitle: 'Todavía no hay planes',
+    emptyHint: 'Anotá esa idea que vienen postergando. Tocá el + y proponé la primera.',
   },
-  serie: {
-    icon: IconTv,
-    title: 'Nada para ver juntos… ¡todavía!',
-    hint: 'Anotá esa serie que se deben hace rato.',
+  cine: {
+    title: 'Cine',
+    subtitle: 'Pelis y series para ver',
+    icon: IconFilm,
+    fab: 'Nueva peli o serie',
+    emptyTitle: 'Nada por ver, por ahora',
+    emptyHint: 'Agregá esa peli o serie que se deben hace rato.',
   },
-  escapada: {
-    icon: IconMap,
-    title: 'Ninguna escapada a la vista',
-    hint: 'Soñá en grande (o en finde) y anotala acá.',
+  viaje: {
+    title: 'Viajes',
+    subtitle: 'Escapadas y viajes',
+    icon: IconPlane,
+    fab: 'Nuevo viaje',
+    emptyTitle: 'Ningún viaje a la vista',
+    emptyHint: 'Soñá en grande, o en finde, y anotalo acá para no olvidarlo.',
   },
 }
 
-export default function CouplePage() {
+export default function PlansPage({ kind }: { kind: PlanKind }) {
+  const navigate = useNavigate()
   const { hid } = useHome()
-  const [kind, setKind] = useState<PlanKind>('plan')
   const [formOpen, setFormOpen] = useState(false)
 
   const { data: plans, loading } = useCollection<CouplePlan>(hid, 'planes', {
@@ -85,84 +100,51 @@ export default function CouplePage() {
         title={plan.title}
         subtitle={plan.notes || undefined}
         dimmed={isDone}
+        left={
+          <Checkbox
+            checked={isDone}
+            onChange={() => toggleDone(plan)}
+            label={isDone ? `Volver a idea: ${plan.title}` : `Marcar hecho: ${plan.title}`}
+          />
+        }
         right={
-          <span className="flex items-center">
-            <button
-              type="button"
-              onClick={() => toggleDone(plan)}
-              aria-label={isDone ? 'Volver a idea' : 'Marcar como hecho'}
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-                isDone ? 'text-love' : 'text-ink2 active:text-love'
-              }`}
-            >
-              {isDone ? (
-                <IconCheckCircle size={22} />
-              ) : (
-                <IconHeart size={22} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => deletePlan(plan)}
-              aria-label="Borrar"
-              className="flex h-11 w-11 shrink-0 items-center justify-center text-ink2 active:text-danger"
-            >
-              <IconTrash size={19} />
-            </button>
-          </span>
+          <IconButton label="Borrar" tone="danger" onClick={() => deletePlan(plan)}>
+            <IconTrash size={19} />
+          </IconButton>
         }
       />
     )
   }
 
-  const empty = EMPTY[kind]
-  const EmptyIcon = empty.icon
+  const copy = COPY[kind]
+  const Icon = copy.icon
+  const isEmpty = ideas.length === 0 && done.length === 0
 
   return (
     <div>
-      <PageHeader title="Modo pareja" subtitle="Planes para ustedes dos" />
+      <PageHeader title={copy.title} subtitle={copy.subtitle} onBack={() => navigate('/nosotros')} />
       <div className="px-4 pt-3 pb-28">
-        <SegmentedControl<PlanKind>
-          options={[
-            { value: 'plan', label: 'Planes' },
-            { value: 'serie', label: 'Series' },
-            { value: 'escapada', label: 'Escapadas' },
-          ]}
-          value={kind}
-          onChange={setKind}
-        />
+        {ideas.length > 0 && <Card>{ideas.map(renderRow)}</Card>}
 
-        {ideas.length > 0 && (
-          <>
-            <SectionTitle>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-love-soft px-2.5 py-0.5 normal-case text-love">
-                <IconHeart size={14} /> Ideas
-              </span>
-            </SectionTitle>
-            <Card>{ideas.map(renderRow)}</Card>
-          </>
-        )}
-
-        {ideas.length === 0 && done.length === 0 && (
-          loading ? (
+        {isEmpty &&
+          (loading ? (
             <p className="px-4 py-14 text-center text-sm text-ink2">Cargando…</p>
           ) : (
             <EmptyState
-              icon={<EmptyIcon size={40} className="text-love" />}
-              title={empty.title}
-              hint={empty.hint}
+              icon={<Icon size={28} />}
+              title={copy.emptyTitle}
+              hint={copy.emptyHint}
             />
-          )
-        )}
+          ))}
 
         {done.length > 0 && (
           <>
-            <SectionTitle>Hechos ✓</SectionTitle>
+            <SectionTitle right={String(done.length)}>Hechos</SectionTitle>
             <Card>{done.map(renderRow)}</Card>
           </>
         )}
       </div>
-      <FAB onClick={() => setFormOpen(true)} label="Nueva idea" />
+      <FAB onClick={() => setFormOpen(true)} label={copy.fab} />
       <PlanFormSheet open={formOpen} onClose={() => setFormOpen(false)} kind={kind} />
     </div>
   )

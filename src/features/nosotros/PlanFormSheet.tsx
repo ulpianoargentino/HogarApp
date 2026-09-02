@@ -7,8 +7,8 @@ import type { PlanKind } from '../../types'
 
 const COPY: Record<PlanKind, { title: string; placeholder: string; submit: string }> = {
   plan: { title: 'Nuevo plan', placeholder: 'Cena en la parrilla nueva', submit: 'Agregar plan' },
-  serie: { title: 'Nueva serie', placeholder: 'The Bear', submit: 'Agregar serie' },
-  escapada: { title: 'Nueva escapada', placeholder: 'Finde en Tigre', submit: 'Agregar escapada' },
+  cine: { title: 'Para ver juntos', placeholder: 'Severance', submit: 'Agregar' },
+  viaje: { title: 'Nuevo viaje', placeholder: 'Finde en Tigre', submit: 'Agregar viaje' },
 }
 
 export default function PlanFormSheet({

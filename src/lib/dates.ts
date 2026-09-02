@@ -78,6 +78,6 @@ export function formatDayLong(iso: string): string {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-  })
+  }).replace(',', '')
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

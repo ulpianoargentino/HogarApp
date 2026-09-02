@@ -1,31 +1,48 @@
 import { useMemo, useState } from 'react'
-import { deleteDoc, doc } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
 import {
   Avatar,
   Card,
   EmptyState,
   FAB,
+  IconButton,
   ListRow,
   PageHeader,
   SectionTitle,
 } from '../../components/ui'
-import { IconChevron, IconTrash, IconWallet } from '../../components/icons'
+import {
+  IconCheck,
+  IconChevron,
+  IconChevronLeft,
+  IconPlus,
+  IconWallet,
+} from '../../components/icons'
 import { useHome } from '../../hooks/useHousehold'
 import { useCollection } from '../../hooks/useCollection'
 import { formatARS } from '../../lib/money'
-import { formatMonthYear, formatShort, monthRange } from '../../lib/dates'
-import { EXPENSE_CATEGORIES, type Expense } from '../../types'
-import { CATEGORY_EMOJI, categoryLabel } from './categories'
+import { formatMonthYear, formatShort, fromISO, monthRange } from '../../lib/dates'
+import { fixedDuesBetween, type FixedDue } from '../../lib/fixed'
+import { EXPENSE_CATEGORIES, type Expense, type FixedExpense } from '../../types'
+import { categoryLabel } from './categories'
+import { CategoryDot } from './CategoryGrid'
 import ExpenseFormSheet from './ExpenseFormSheet'
+import FixedExpenseFormSheet from './FixedExpenseFormSheet'
+import { PayFixedSheet } from './PayFixedSheet'
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
 
 export default function ExpensesPage() {
   const { hid, uid, household, partnerUid } = useHome()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1) // 1-12
+
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
+  const [fixedFormOpen, setFixedFormOpen] = useState(false)
+  const [editingFixed, setEditingFixed] = useState<FixedExpense | null>(null)
+  const [paying, setPaying] = useState<{ fixed: FixedExpense; dueDate: string } | null>(null)
 
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
   const [from, to] = monthRange(year, month)
@@ -36,6 +53,9 @@ export default function ExpensesPage() {
       ['date', '<=', to],
     ],
     orderByField: ['date', 'desc'],
+  })
+  const { data: fixedList } = useCollection<FixedExpense>(hid, 'fixedExpenses', {
+    orderByField: ['dayOfMonth', 'asc'],
   })
 
   function goPrev() {
@@ -58,6 +78,12 @@ export default function ExpensesPage() {
   }
 
   const total = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses])
+  const fixedTotal = useMemo(
+    () => expenses.filter((e) => e.kind === 'fijo').reduce((sum, e) => sum + e.amount, 0),
+    [expenses],
+  )
+  const variableTotal = total - fixedTotal
+  const fixedPct = total > 0 ? Math.round((fixedTotal / total) * 100) : 0
 
   const members = useMemo(
     () =>
@@ -68,6 +94,12 @@ export default function ExpensesPage() {
       })),
     [uid, partnerUid, household.memberProfiles, expenses],
   )
+
+  const dues = useMemo(
+    () => fixedDuesBetween(fixedList, expenses, from, to),
+    [fixedList, expenses, from, to],
+  )
+  const paidCount = dues.filter((d) => d.paid).length
 
   const byCategory = useMemo(
     () =>
@@ -82,92 +114,174 @@ export default function ExpensesPage() {
     [expenses],
   )
 
-  async function deleteExpense(expense: Expense) {
-    if (!window.confirm(`¿Borrar el gasto «${expense.description}»?`)) return
-    await deleteDoc(doc(db, 'households', hid, 'expenses', expense.id))
+  function firstName(memberUid: string): string {
+    return household.memberProfiles[memberUid]?.name.split(' ')[0] ?? 'Alguien'
   }
 
-  function payerName(paidBy: string): string {
-    return household.memberProfiles[paidBy]?.name.split(' ')[0] ?? 'Alguien'
+  function openFixedForm(fixed: FixedExpense | null) {
+    setEditingFixed(fixed)
+    setFixedFormOpen(true)
   }
+
+  const hasAnything = expenses.length > 0 || dues.length > 0
+  const monthLabel = capitalize(formatMonthYear(year, month))
 
   return (
     <div>
-      <PageHeader title="Gastos" />
-      <div className="px-4 pt-3 pb-28">
-        <div className="mb-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={goPrev}
-            aria-label="Mes anterior"
-            className="flex h-11 w-11 items-center justify-center text-ink2"
-          >
-            <IconChevron size={22} className="rotate-180" />
-          </button>
-          <span className="font-semibold capitalize">{formatMonthYear(year, month)}</span>
-          <button
-            type="button"
-            onClick={goNext}
-            disabled={isCurrentMonth}
-            aria-label="Mes siguiente"
-            className="flex h-11 w-11 items-center justify-center text-ink2 disabled:opacity-30"
-          >
-            <IconChevron size={22} />
-          </button>
-        </div>
+      <PageHeader
+        title="Gastos"
+        eyebrow={monthLabel}
+        right={
+          <div className="flex gap-2">
+            <IconButton label="Mes anterior" onClick={goPrev}>
+              <IconChevronLeft size={22} />
+            </IconButton>
+            <span
+              aria-disabled={isCurrentMonth}
+              className={isCurrentMonth ? 'pointer-events-none opacity-35' : ''}
+            >
+              <IconButton label="Mes siguiente" onClick={goNext}>
+                <IconChevron size={22} />
+              </IconButton>
+            </span>
+          </div>
+        }
+      />
 
-        {expenses.length > 0 ? (
+      <div className="px-4 pt-2 pb-28">
+        {!hasAnything && loading ? (
+          <p className="px-4 py-14 text-center text-sm text-ink2">Cargando…</p>
+        ) : !hasAnything ? (
           <>
+            <EmptyState
+              icon={<IconWallet size={30} />}
+              title={`Sin gastos en ${monthLabel.toLowerCase()}`}
+              hint="Anotá el primero con el + o programá los fijos de todos los meses."
+            />
             <Card>
-              <div className="px-4 pt-4 pb-2 text-center">
-                <p className="text-sm text-ink2">Total del mes</p>
-                <p className="text-3xl font-bold tracking-tight">{formatARS(total)}</p>
-              </div>
-              {members.map((m) => (
-                <ListRow
-                  key={m.uid}
-                  left={<Avatar profile={m.profile} size={28} />}
-                  title={m.profile?.name.split(' ')[0] ?? 'Alguien'}
-                  right={<span className="font-semibold">{formatARS(m.total)}</span>}
-                />
-              ))}
-            </Card>
-
-            <SectionTitle>Por categoría</SectionTitle>
-            <Card>
-              {byCategory.map(({ category, total: catTotal }) => (
-                <ListRow
-                  key={category}
-                  title={`${CATEGORY_EMOJI[category]} ${categoryLabel(category)}`}
-                  right={<span className="font-semibold">{formatARS(catTotal)}</span>}
-                />
-              ))}
-            </Card>
-
-            <SectionTitle>Movimientos</SectionTitle>
-            <Card>
-              {expenses.map((expense) => (
-                <ExpenseRow
-                  key={expense.id}
-                  expense={expense}
-                  payerName={payerName(expense.paidBy)}
-                  onEdit={() => {
-                    setEditing(expense)
-                    setFormOpen(true)
-                  }}
-                  onDelete={() => deleteExpense(expense)}
-                />
-              ))}
+              <AddFixedRow onClick={() => openFixedForm(null)} />
             </Card>
           </>
-        ) : loading ? (
-          <p className="px-4 py-14 text-center text-sm text-ink2">Cargando…</p>
         ) : (
-          <EmptyState
-            icon={<IconWallet size={40} />}
-            title="Todavía no anotaron gastos este mes"
-            hint="Agregá el primero con el + y llevá la cuenta entre los dos."
-          />
+          <>
+            {/* Resumen del mes */}
+            <Card className="px-4 pt-4 pb-1">
+              <p className="text-[13px] font-semibold text-ink2">Total del mes</p>
+              <p className="tabular font-display text-3xl font-extrabold tracking-tight">
+                {formatARS(total)}
+              </p>
+              <div
+                className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-card2"
+                role="img"
+                aria-label={`Fijos ${fixedPct}%, variables ${100 - fixedPct}%`}
+              >
+                {fixedTotal > 0 && (
+                  <div className="h-full bg-brand" style={{ width: `${fixedPct}%` }} />
+                )}
+                {variableTotal > 0 && (
+                  <div className="h-full flex-1 bg-accent" />
+                )}
+              </div>
+              <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-xs text-ink2">
+                <span className="inline-block h-2 w-2 rounded-full bg-brand" aria-hidden />
+                <span>
+                  Fijos <span className="tabular font-semibold text-ink">{formatARS(fixedTotal)}</span>
+                </span>
+                <span aria-hidden>·</span>
+                <span className="inline-block h-2 w-2 rounded-full bg-accent" aria-hidden />
+                <span>
+                  Variables{' '}
+                  <span className="tabular font-semibold text-ink">{formatARS(variableTotal)}</span>
+                </span>
+              </p>
+              <div className="mt-3 border-t border-line">
+                {members.map((m) => (
+                  <div key={m.uid} className="flex min-h-12 items-center gap-3 py-2">
+                    <Avatar profile={m.profile} size={28} />
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {m.profile?.name.split(' ')[0] ?? 'Alguien'}
+                    </span>
+                    <span className="tabular font-semibold">{formatARS(m.total)}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Gastos fijos del mes */}
+            <SectionTitle right={dues.length > 0 ? `${paidCount}/${dues.length}` : undefined}>
+              Gastos fijos
+            </SectionTitle>
+            <Card>
+              {dues.length === 0 && (
+                <p className="border-b border-line px-4 py-3 text-[13px] text-ink2">
+                  Programá alquiler, expensas, servicios… y el calendario te avisa cada mes.
+                </p>
+              )}
+              {dues.map((due) => (
+                <FixedDueRow
+                  key={`${due.fixed.id}_${due.dueDate}`}
+                  due={due}
+                  onEdit={() => openFixedForm(due.fixed)}
+                  onPay={() => setPaying({ fixed: due.fixed, dueDate: due.dueDate })}
+                />
+              ))}
+              <AddFixedRow onClick={() => openFixedForm(null)} />
+            </Card>
+
+            {/* Por categoría */}
+            {byCategory.length > 0 && (
+              <>
+                <SectionTitle>Por categoría</SectionTitle>
+                <Card>
+                  {byCategory.map(({ category, total: catTotal }) => (
+                    <ListRow
+                      key={category}
+                      left={<CategoryDot category={category} />}
+                      title={categoryLabel(category)}
+                      right={
+                        <span className="tabular font-semibold">{formatARS(catTotal)}</span>
+                      }
+                    />
+                  ))}
+                </Card>
+              </>
+            )}
+
+            {/* Movimientos */}
+            {expenses.length > 0 && (
+              <>
+                <SectionTitle right={String(expenses.length)}>Movimientos</SectionTitle>
+                <Card>
+                  {expenses.map((expense) => (
+                    <ListRow
+                      key={expense.id}
+                      onClick={() => {
+                        setEditing(expense)
+                        setFormOpen(true)
+                      }}
+                      left={<CategoryDot category={expense.category} />}
+                      title={expense.description}
+                      subtitle={
+                        <>
+                          {formatShort(expense.date)} · {firstName(expense.paidBy)}
+                          {expense.kind === 'fijo' && (
+                            <span className="ml-1.5 inline-block rounded bg-brand-soft px-1.5 text-[11px] font-semibold text-brand dark:text-accent">
+                              Fijo
+                            </span>
+                          )}
+                        </>
+                      }
+                      right={
+                        <span className="tabular shrink-0 font-semibold">
+                          {formatARS(expense.amount)}
+                        </span>
+                      }
+                    />
+                  ))}
+                </Card>
+              </>
+            )}
+          </>
         )}
       </div>
 
@@ -178,47 +292,72 @@ export default function ExpensesPage() {
         }}
         label="Nuevo gasto"
       />
-      <ExpenseFormSheet
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        expense={editing}
+      <ExpenseFormSheet open={formOpen} onClose={() => setFormOpen(false)} expense={editing} />
+      <FixedExpenseFormSheet
+        open={fixedFormOpen}
+        onClose={() => setFixedFormOpen(false)}
+        fixed={editingFixed}
       />
+      <PayFixedSheet due={paying} onClose={() => setPaying(null)} />
     </div>
   )
 }
 
-function ExpenseRow({
-  expense,
-  payerName,
+function FixedDueRow({
+  due,
   onEdit,
-  onDelete,
+  onPay,
 }: {
-  expense: Expense
-  payerName: string
+  due: FixedDue
   onEdit: () => void
-  onDelete: () => void
+  onPay: () => void
 }) {
+  const { fixed, dueDate, paid } = due
+  const dueDay = fromISO(dueDate).getDate()
   return (
-    <ListRow
-      onClick={onEdit}
-      title={expense.description}
-      subtitle={`${formatShort(expense.date)} · ${payerName} · ${categoryLabel(expense.category)}`}
-      right={
-        <span className="flex shrink-0 items-center gap-1">
-          <span className="font-semibold">{formatARS(expense.amount)}</span>
-          <span
-            role="button"
-            aria-label="Borrar gasto"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-            className="flex h-11 w-11 items-center justify-center text-ink2 active:text-danger"
-          >
-            <IconTrash size={19} />
+    <div className="flex min-h-14 items-center gap-3 border-b border-line px-4 py-2 last:border-b-0">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <CategoryDot category={fixed.category} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{fixed.name}</span>
+          <span className="block truncate text-[13px] text-ink2">
+            Vence el {dueDay} · <span className="tabular">{formatARS(fixed.amount)}</span>
           </span>
         </span>
-      }
-    />
+      </button>
+      {paid ? (
+        <span className="flex shrink-0 items-center gap-1.5 text-ok">
+          <IconCheck size={18} strokeWidth={2.4} />
+          <span className="tabular font-semibold text-ink">{formatARS(paid.amount)}</span>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={onPay}
+          className="min-h-9 shrink-0 rounded-full bg-brand-soft px-3 text-sm font-semibold text-brand transition-colors duration-150 active:bg-line dark:text-accent"
+        >
+          Pagar
+        </button>
+      )}
+    </div>
+  )
+}
+
+function AddFixedRow({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left font-semibold text-brand transition-colors duration-150 active:bg-card2 dark:text-accent"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft">
+        <IconPlus size={18} />
+      </span>
+      Programar gasto fijo
+    </button>
   )
 }

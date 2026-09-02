@@ -1,79 +1,73 @@
-import { Avatar, ListRow } from '../../components/ui'
-import { IconTrash } from '../../components/icons'
-import { formatShort, toISO } from '../../lib/dates'
-import type { MemberProfile, Task } from '../../types'
+import { Avatar, Checkbox } from '../../components/ui'
+import { IconRepeat } from '../../components/icons'
+import { recurrenceLabel } from '../../lib/taskSeries'
+import type { MemberProfile, Task, TaskSeries } from '../../types'
 
+function firstName(profile: MemberProfile | null): string {
+  return profile?.name.split(' ')[0] ?? 'Alguien'
+}
+
+/**
+ * Fila de una tarea del día: check a la izquierda (completar/desmarcar),
+ * texto tocable (abre edición) y los puntos a la derecha.
+ */
 export default function TaskRow({
   task,
+  series,
   profiles,
   onToggle,
-  onDelete,
+  onEdit,
 }: {
   task: Task
+  /** Serie a la que pertenece, si es una tarea repetida */
+  series: TaskSeries | null
   profiles: Record<string, MemberProfile>
   onToggle: (task: Task) => void
-  onDelete: (task: Task) => void
+  onEdit: (task: Task) => void
 }) {
   const assignee = profiles[task.assigneeUid] ?? null
   const completer = task.completedBy ? (profiles[task.completedBy] ?? null) : null
 
-  const subtitle = task.done ? (
-    <span className="flex items-center gap-1.5">
-      <Avatar profile={completer} size={16} />
-      <span className="truncate">
-        {completer?.name.split(' ')[0] ?? 'Alguien'}
-        {task.completedAt ? ` · ${formatShort(toISO(task.completedAt.toDate()))}` : ''}
-        {' · '}
-        <span className="text-gold">+{task.points} pts</span>
-      </span>
-    </span>
-  ) : (
-    <span className="flex items-center gap-1.5">
-      <Avatar profile={assignee} size={16} />
-      <span className="truncate">
-        {assignee?.name.split(' ')[0] ?? 'Alguien'} ·{' '}
-        <span className="text-gold">+{task.points} pts</span>
-      </span>
-    </span>
-  )
-
   return (
-    <ListRow
-      dimmed={task.done}
-      left={
-        <button
-          type="button"
-          onClick={() => onToggle(task)}
-          aria-label={task.done ? 'Desmarcar tarea' : 'Marcar como hecha'}
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-            task.done ? 'text-ok' : 'text-ink2'
-          }`}
-        >
-          <span
-            className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
-              task.done ? 'border-ok bg-ok text-white' : 'border-line bg-card2'
-            }`}
-          >
-            {task.done && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m5 12.5 5 5 9-11" />
-              </svg>
-            )}
-          </span>
-        </button>
-      }
-      title={task.title}
-      subtitle={subtitle}
-      right={
-        <button
-          type="button"
-          onClick={() => onDelete(task)}
-          aria-label="Borrar tarea"
-          className="flex h-11 w-11 shrink-0 items-center justify-center text-ink2 active:text-danger"
-        >
-          <IconTrash size={19} />
-        </button>
-      }
-    />
+    <div
+      className={`flex min-h-13 w-full items-center gap-1 border-b border-line py-1 pr-4 pl-1 last:border-b-0 ${
+        task.done ? 'opacity-55' : ''
+      }`}
+    >
+      <Checkbox
+        checked={task.done}
+        onChange={() => onToggle(task)}
+        label={task.done ? `Desmarcar ${task.title}` : `Marcar ${task.title} como hecha`}
+      />
+      <button
+        type="button"
+        onClick={() => onEdit(task)}
+        className="min-w-0 flex-1 py-1.5 text-left"
+      >
+        <span className={`block truncate font-medium ${task.done ? 'line-through' : ''}`}>
+          {task.title}
+        </span>
+        <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-ink2">
+          {task.done ? (
+            <span className="truncate">Hecha por {firstName(completer)}</span>
+          ) : (
+            <>
+              <Avatar profile={assignee} size={16} />
+              <span className="truncate">{firstName(assignee)}</span>
+              {series && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <IconRepeat size={13} className="shrink-0" />
+                  <span className="truncate">{recurrenceLabel(series.recurrence)}</span>
+                </>
+              )}
+            </>
+          )}
+        </span>
+      </button>
+      {task.points > 0 && (
+        <span className="shrink-0 pl-2 font-semibold text-accent tabular">+{task.points}</span>
+      )}
+    </div>
   )
 }
