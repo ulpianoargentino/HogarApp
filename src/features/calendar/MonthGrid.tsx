@@ -1,16 +1,32 @@
+import { IconChevron, IconChevronLeft } from '../../components/icons'
+import { Card } from '../../components/ui'
 import { daysInMonth, formatMonthYear, todayISO } from '../../lib/dates'
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+
+/** accent = evento, brand = tarea, warn = pago fijo pendiente, ok = pago fijo pagado */
+export type DotTone = 'accent' | 'brand' | 'warn' | 'ok'
+
+const DOT_CLASS: Record<DotTone, string> = {
+  accent: 'bg-accent',
+  brand: 'bg-brand dark:bg-accent',
+  warn: 'bg-warn',
+  ok: 'bg-ok',
+}
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-/** Grilla del mes: 7 columnas, arranca lunes, puntito en días con eventos. */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** Grilla del mes: 7 columnas desde lunes, hasta 3 puntitos por día, tap selecciona. */
 export default function MonthGrid({
   year,
   month1,
-  markedDays,
+  dots,
   selectedDay,
   onSelectDay,
   onPrev,
@@ -18,9 +34,9 @@ export default function MonthGrid({
 }: {
   year: number
   month1: number
-  /** fechas ISO del mes que llevan puntito */
-  markedDays: Set<string>
-  selectedDay: string | null
+  /** fecha ISO → tonos de los puntitos (máx. 3 se muestran) */
+  dots: Map<string, DotTone[]>
+  selectedDay: string
   onSelectDay: (iso: string) => void
   onPrev: () => void
   onNext: () => void
@@ -35,61 +51,63 @@ export default function MonthGrid({
     ...Array.from({ length: total }, (_, i) => `${year}-${pad(month1)}-${pad(i + 1)}`),
   ]
 
+  const navClass =
+    'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-brand transition-colors duration-150 active:bg-card2 dark:text-accent'
+
   return (
-    <div className="rounded-2xl bg-card p-3 shadow-sm">
-      <div className="mb-2 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onPrev}
-          aria-label="Mes anterior"
-          className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-ink2 active:bg-card2"
-        >
-          ‹
+    <Card className="p-3">
+      <div className="mb-1 flex items-center justify-between">
+        <button type="button" onClick={onPrev} aria-label="Mes anterior" className={navClass}>
+          <IconChevronLeft size={22} />
         </button>
-        <span className="font-semibold capitalize">{formatMonthYear(year, month1)}</span>
-        <button
-          type="button"
-          onClick={onNext}
-          aria-label="Mes siguiente"
-          className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-ink2 active:bg-card2"
-        >
-          ›
+        <h2 className="text-[16px] font-bold">{capitalize(formatMonthYear(year, month1))}</h2>
+        <button type="button" onClick={onNext} aria-label="Mes siguiente" className={navClass}>
+          <IconChevron size={22} />
         </button>
       </div>
-      <div className="grid grid-cols-7 text-center">
+      <div className="grid grid-cols-7 gap-y-1 text-center">
         {WEEKDAYS.map((d, i) => (
           <span key={i} className="pb-1 text-xs font-semibold text-ink2">
             {d}
           </span>
         ))}
-        {cells.map((iso, i) =>
-          iso === null ? (
-            <span key={`x${i}`} />
-          ) : (
+        {cells.map((iso, i) => {
+          if (iso === null) return <span key={`x${i}`} />
+          const selected = iso === selectedDay
+          const isToday = iso === today
+          const tones = (dots.get(iso) ?? []).slice(0, 3)
+          return (
             <button
               key={iso}
               type="button"
               onClick={() => onSelectDay(iso)}
-              className={`relative mx-auto flex h-11 w-11 flex-col items-center justify-center rounded-full text-sm ${
-                iso === selectedDay
-                  ? 'bg-accent font-semibold text-white'
-                  : iso === today
-                    ? 'bg-accent-soft font-semibold text-accent'
+              aria-pressed={selected}
+              aria-label={`${Number(iso.slice(8))} de ${formatMonthYear(year, month1)}`}
+              className={`mx-auto flex aspect-square min-h-11 w-full max-w-12 flex-col items-center justify-center rounded-full transition-colors duration-150 ${
+                selected
+                  ? 'bg-brand text-on-brand'
+                  : isToday
+                    ? 'font-bold text-brand ring-2 ring-brand/45 ring-inset dark:text-accent dark:ring-accent/60'
                     : 'text-ink active:bg-card2'
               }`}
             >
-              {Number(iso.slice(8))}
-              {markedDays.has(iso) && (
-                <span
-                  className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${
-                    iso === selectedDay ? 'bg-white' : 'bg-accent'
-                  }`}
-                />
-              )}
+              <span className={`tabular text-sm leading-none ${isToday ? 'font-bold' : ''}`}>
+                {Number(iso.slice(8))}
+              </span>
+              <span className="mt-1 flex h-1.5 items-center gap-0.5">
+                {tones.map((tone) => (
+                  <span
+                    key={tone}
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      selected ? 'bg-on-brand/85' : DOT_CLASS[tone]
+                    }`}
+                  />
+                ))}
+              </span>
             </button>
-          ),
-        )}
+          )
+        })}
       </div>
-    </div>
+    </Card>
   )
 }

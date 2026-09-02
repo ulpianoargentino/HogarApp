@@ -22,8 +22,13 @@ export default function LoginPage() {
 
   return (
     <div className="pt-safe pb-safe flex min-h-dvh flex-col items-center justify-center px-8">
-      <div className="mb-2 text-6xl">🏠</div>
-      <h1 className="text-3xl font-bold">HogarApp</h1>
+      <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-[22px] bg-brand text-on-brand shadow-[0_12px_28px_-12px_rgb(27_47_91/0.7)]">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M3 10.5 12 3l9 7.5" />
+          <path d="M5 9.5V21h5v-6h4v6h5V9.5" />
+        </svg>
+      </div>
+      <h1 className="text-3xl font-extrabold">HogarApp</h1>
       <p className="mt-2 mb-10 text-center text-ink2">
         Administrá tu hogar entre dos: tareas, gastos, compras y más.
       </p>
@@ -31,7 +36,7 @@ export default function LoginPage() {
         type="button"
         onClick={handleSignIn}
         disabled={busy || loading}
-        className="flex min-h-12 w-full max-w-xs items-center justify-center gap-3 rounded-xl bg-accent font-semibold text-white active:opacity-80 disabled:opacity-50"
+        className="flex min-h-12 w-full max-w-xs items-center justify-center gap-3 rounded-xl bg-brand font-display font-bold text-on-brand active:opacity-80 disabled:opacity-50"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
           <path

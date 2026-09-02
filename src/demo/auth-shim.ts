@@ -9,9 +9,9 @@ export interface User {
 
 export const DEMO_USER: User = {
   uid: 'demo-ana',
-  displayName: 'Ana',
+  displayName: 'José',
   photoURL: null,
-  email: 'ana@demo.hogarapp',
+  email: 'jose@demo.hogarapp',
 }
 
 type AuthCallback = (u: User | null) => void

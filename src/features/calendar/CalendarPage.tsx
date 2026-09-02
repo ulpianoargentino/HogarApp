@@ -1,110 +1,179 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
-import { Card, EmptyState, FAB, PageHeader, SectionTitle } from '../../components/ui'
-import { IconBell, IconCalendar } from '../../components/icons'
+import { Card, FAB, ListRow, PageHeader, SectionTitle } from '../../components/ui'
+import {
+  IconBell,
+  IconCheck,
+  IconClock,
+  IconTasks,
+  IconWallet,
+} from '../../components/icons'
 import { useHome } from '../../hooks/useHousehold'
 import { useCollection } from '../../hooks/useCollection'
 import { computeUpcoming, type UpcomingItem } from '../../hooks/useUpcoming'
 import { occurrencesBetween } from '../../lib/recurrence'
-import { formatShort, fromISO, monthRange, relativeLabel, todayISO } from '../../lib/dates'
-import type { HouseholdEvent, Warranty } from '../../types'
-import { TypeChip } from './eventMeta'
-import MonthGrid from './MonthGrid'
+import { materializeSeries } from '../../lib/taskSeries'
+import { fixedDuesBetween } from '../../lib/fixed'
+import { formatARS } from '../../lib/money'
+import { formatDayLong, formatLong, monthRange, relativeLabel, todayISO } from '../../lib/dates'
+import { PayFixedSheet } from '../expenses/PayFixedSheet'
+import type {
+  Expense,
+  FixedExpense,
+  HouseholdEvent,
+  Task,
+  TaskSeries,
+} from '../../types'
+import { TYPE_TEXT, eventTypeLabel } from './eventMeta'
+import MonthGrid, { type DotTone } from './MonthGrid'
 import EventFormSheet from './EventFormSheet'
 
-interface MonthItem {
-  key: string
-  date: string
-  title: string
-  type: string
-  done: boolean
-  event: HouseholdEvent | null
+type PayTarget = { fixed: FixedExpense; dueDate: string } | null
+
+function monthOf(iso: string): { year: number; month1: number } {
+  return { year: Number(iso.slice(0, 4)), month1: Number(iso.slice(5, 7)) }
+}
+
+/** Ícono redondo a la izquierda de cada fila del día */
+function RowIcon({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <span
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card2 ${className}`}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Botón chico de acción (Pagar / Listo) */
+function PillButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-9 shrink-0 rounded-full bg-brand-soft px-3.5 text-sm font-semibold text-brand transition-colors duration-150 active:bg-brand/15 dark:text-accent"
+    >
+      {children}
+    </button>
+  )
 }
 
 export default function CalendarPage() {
-  const { hid } = useHome()
-  const { data: events, loading } = useCollection<HouseholdEvent>(hid, 'events', {
-    orderByField: ['startDate', 'asc'],
-  })
-  const { data: warranties } = useCollection<Warranty>(hid, 'warranties', {
-    orderByField: ['expiresAt', 'asc'],
-  })
+  const { hid, household } = useHome()
+  const today = todayISO()
 
-  const [view, setView] = useState(() => {
-    const t = fromISO(todayISO())
-    return { year: t.getFullYear(), month1: t.getMonth() + 1 }
-  })
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [view, setView] = useState(() => monthOf(today))
+  const [selectedDay, setSelectedDay] = useState(today)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<HouseholdEvent | null>(null)
-  const monthListRef = useRef<HTMLDivElement>(null)
+  const [paying, setPaying] = useState<PayTarget>(null)
 
-  const upcoming = useMemo(() => computeUpcoming(events, warranties), [events, warranties])
+  const [monthStart, monthEnd] = monthRange(view.year, view.month1)
+  const [nowStart, nowEnd] = monthRange(monthOf(today).year, monthOf(today).month1)
+  const isCurrentMonth = monthStart === nowStart
 
-  // Próximos agrupados por etiqueta relativa (Hoy / Mañana / vie 29 ago)
+  // ---- Suscripciones ----
+  const { data: events } = useCollection<HouseholdEvent>(hid, 'events', {
+    orderByField: ['startDate', 'asc'],
+  })
+  const { data: tasks, loading: tasksLoading } = useCollection<Task>(hid, 'tasks', {
+    filters: [
+      ['date', '>=', monthStart],
+      ['date', '<=', monthEnd],
+    ],
+    orderByField: ['date', 'asc'],
+  })
+  const { data: series, loading: seriesLoading } = useCollection<TaskSeries>(hid, 'taskSeries')
+  const { data: fixed } = useCollection<FixedExpense>(hid, 'fixedExpenses', {
+    orderByField: ['dayOfMonth', 'asc'],
+  })
+  const { data: expenses } = useCollection<Expense>(hid, 'expenses', {
+    filters: [
+      ['date', '>=', monthStart],
+      ['date', '<=', monthEnd],
+    ],
+    orderByField: ['date', 'desc'],
+  })
+  // Para "Próximos" necesitamos los pagos del mes actual aunque estemos mirando otro mes.
+  // Cuando coinciden, la query es idéntica y Firestore comparte el listener.
+  const { data: expensesNow } = useCollection<Expense>(hid, 'expenses', {
+    filters: [
+      ['date', '>=', nowStart],
+      ['date', '<=', nowEnd],
+    ],
+    orderByField: ['date', 'desc'],
+  })
+  const upcomingExpenses = isCurrentMonth ? expenses : expensesNow
+
+  // Materializar las series del día seleccionado (solo con las tareas ya cargadas:
+  // si no, el set() pisaría una tarea de serie ya hecha).
+  useEffect(() => {
+    if (tasksLoading || seriesLoading || series.length === 0) return
+    materializeSeries(hid, series, tasks, selectedDay, selectedDay).catch((err) =>
+      console.error('materializeSeries', err),
+    )
+  }, [hid, series, tasks, selectedDay, tasksLoading, seriesLoading])
+
+  // ---- Puntitos del mes ----
+  const dots = useMemo(() => {
+    const map = new Map<string, Set<DotTone>>()
+    const add = (date: string, tone: DotTone) => {
+      const set = map.get(date) ?? new Set<DotTone>()
+      set.add(tone)
+      map.set(date, set)
+    }
+    for (const event of events) {
+      for (const date of occurrencesBetween(event, monthStart, monthEnd)) add(date, 'accent')
+    }
+    for (const t of tasks) add(t.date, 'brand')
+    for (const s of series) {
+      if (!s.active) continue
+      for (const date of occurrencesBetween(s, monthStart, monthEnd)) add(date, 'brand')
+    }
+    for (const due of fixedDuesBetween(fixed, expenses, monthStart, monthEnd)) {
+      add(due.dueDate, due.paid ? 'ok' : 'warn')
+    }
+    const order: DotTone[] = ['accent', 'brand', 'warn', 'ok']
+    const out = new Map<string, DotTone[]>()
+    for (const [date, set] of map) out.set(date, order.filter((t) => set.has(t)))
+    return out
+  }, [events, tasks, series, fixed, expenses, monthStart, monthEnd])
+
+  // ---- Lo del día seleccionado ----
+  const dayEvents = useMemo(
+    () => events.filter((e) => occurrencesBetween(e, selectedDay, selectedDay).length > 0),
+    [events, selectedDay],
+  )
+  const dayTasks = useMemo(() => tasks.filter((t) => t.date === selectedDay), [tasks, selectedDay])
+  const dayDues = useMemo(
+    () => fixedDuesBetween(fixed, expenses, selectedDay, selectedDay),
+    [fixed, expenses, selectedDay],
+  )
+  const dayEmpty = dayEvents.length + dayTasks.length + dayDues.length === 0
+
+  // ---- Próximos 14 días agrupados por etiqueta relativa ----
   const upcomingGroups = useMemo(() => {
+    const { items } = computeUpcoming(events, fixed, upcomingExpenses)
     const groups: Array<{ label: string; items: UpcomingItem[] }> = []
-    for (const item of upcoming.items) {
+    for (const item of items) {
       const label = relativeLabel(item.date)
       const last = groups[groups.length - 1]
       if (last && last.label === label) last.items.push(item)
       else groups.push({ label, items: [item] })
     }
     return groups
-  }, [upcoming])
+  }, [events, fixed, upcomingExpenses])
 
-  // Ocurrencias del mes visible (eventos + vencimientos de garantía)
-  const monthItems = useMemo<MonthItem[]>(() => {
-    const [from, to] = monthRange(view.year, view.month1)
-    const list: MonthItem[] = []
-    for (const event of events) {
-      for (const date of occurrencesBetween(event, from, to)) {
-        list.push({
-          key: `${event.id}:${date}`,
-          date,
-          title: event.title,
-          type: event.type,
-          done: event.doneDates?.includes(date) ?? false,
-          event,
-        })
-      }
-    }
-    for (const w of warranties) {
-      if (w.expiresAt >= from && w.expiresAt <= to) {
-        list.push({
-          key: `w:${w.id}`,
-          date: w.expiresAt,
-          title: `Vence garantía: ${w.item}`,
-          type: 'garantia',
-          done: false,
-          event: null,
-        })
-      }
-    }
-    return list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  }, [events, warranties, view])
-
-  const markedDays = useMemo(() => new Set(monthItems.map((i) => i.date)), [monthItems])
-
+  // ---- Acciones ----
   function moveMonth(delta: number) {
-    setSelectedDay(null)
     setView(({ year, month1 }) => {
       const total = year * 12 + (month1 - 1) + delta
-      return { year: Math.floor(total / 12), month1: (((total % 12) + 12) % 12) + 1 }
+      const next = { year: Math.floor(total / 12), month1: (((total % 12) + 12) % 12) + 1 }
+      const [start] = monthRange(next.year, next.month1)
+      setSelectedDay(start === nowStart ? today : start)
+      return next
     })
-  }
-
-  function selectDay(iso: string) {
-    const next = selectedDay === iso ? null : iso
-    setSelectedDay(next)
-    if (next && markedDays.has(next)) {
-      requestAnimationFrame(() => {
-        monthListRef.current
-          ?.querySelector(`[data-date="${next}"]`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-    }
   }
 
   async function markOccurrenceDone(event: HouseholdEvent, date: string) {
@@ -122,44 +191,144 @@ export default function CalendarPage() {
     setFormOpen(true)
   }
 
+  function assigneeName(uid: string): string {
+    return household.memberProfiles[uid]?.name.split(' ')[0] ?? 'Sin asignar'
+  }
+
   return (
     <div>
       <PageHeader title="Calendario" />
       <div className="px-4 pb-28">
-        <SectionTitle>Próximos</SectionTitle>
+        <div className="mt-2">
+          <MonthGrid
+            year={view.year}
+            month1={view.month1}
+            dots={dots}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            onPrev={() => moveMonth(-1)}
+            onNext={() => moveMonth(1)}
+          />
+        </div>
+
+        <SectionTitle right={formatDayLong(selectedDay)}>{relativeLabel(selectedDay)}</SectionTitle>
+        <Card>
+          {dayEmpty ? (
+            <p className="px-4 py-4 text-sm text-ink2">Nada anotado para este día</p>
+          ) : (
+            <>
+              {dayEvents.map((event) => (
+                <ListRow
+                  key={event.id}
+                  onClick={() => openEdit(event)}
+                  left={
+                    <RowIcon className={TYPE_TEXT[event.type] ?? 'text-ink2'}>
+                      {event.time ? <IconClock size={20} /> : <IconBell size={20} />}
+                    </RowIcon>
+                  }
+                  title={event.title}
+                  subtitle={
+                    event.time
+                      ? `${event.time} · ${eventTypeLabel(event.type)}`
+                      : eventTypeLabel(event.type)
+                  }
+                />
+              ))}
+              {dayTasks.map((task) => (
+                <ListRow
+                  key={task.id}
+                  left={
+                    <RowIcon className="text-brand dark:text-accent">
+                      <IconTasks size={20} />
+                    </RowIcon>
+                  }
+                  title={task.title}
+                  subtitle={assigneeName(task.assigneeUid)}
+                />
+              ))}
+              {dayDues.map((due) => (
+                <ListRow
+                  key={`${due.fixed.id}:${due.dueDate}`}
+                  left={
+                    <RowIcon className={due.paid ? 'text-ok' : 'text-warn'}>
+                      <IconWallet size={20} />
+                    </RowIcon>
+                  }
+                  title={`Pagar ${due.fixed.name}`}
+                  subtitle={
+                    due.paid ? `Pagado · ${formatARS(due.paid.amount)}` : formatARS(due.fixed.amount)
+                  }
+                  right={
+                    due.paid ? (
+                      <IconCheck size={20} className="shrink-0 text-ok" />
+                    ) : (
+                      <PillButton onClick={() => setPaying({ fixed: due.fixed, dueDate: due.dueDate })}>
+                        Pagar
+                      </PillButton>
+                    )
+                  }
+                />
+              ))}
+            </>
+          )}
+        </Card>
+
+        <SectionTitle>Próximos 14 días</SectionTitle>
         {upcomingGroups.length > 0 ? (
           upcomingGroups.map((group) => (
             <div key={group.label} className="mb-3">
-              <p className="mb-1 px-1 text-sm font-semibold text-ink">{group.label}</p>
+              <p className="mb-1 px-1 text-[13px] font-semibold text-ink2">{group.label}</p>
               <Card>
                 {group.items.map((item) => (
                   <div
-                    key={`${item.sourceId}:${item.date}`}
+                    key={`${item.kind}:${item.sourceId}:${item.date}`}
                     className={`flex min-h-13 items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 ${
-                      item.urgent ? 'border-l-4 border-l-warn bg-warn-soft' : 'bg-card'
+                      item.urgent ? 'bg-warn-soft' : ''
                     }`}
                   >
-                    {item.urgent && <IconBell size={18} className="shrink-0 text-warn" />}
+                    <RowIcon
+                      className={
+                        item.urgent
+                          ? 'bg-card text-warn'
+                          : item.kind === 'pago'
+                            ? 'text-warn'
+                            : (TYPE_TEXT[item.type] ?? 'text-ink2')
+                      }
+                    >
+                      {item.urgent ? (
+                        <IconBell size={20} />
+                      ) : item.kind === 'pago' ? (
+                        <IconWallet size={20} />
+                      ) : item.time ? (
+                        <IconClock size={20} />
+                      ) : (
+                        <IconBell size={20} />
+                      )}
+                    </RowIcon>
                     <button
                       type="button"
                       onClick={item.event ? () => openEdit(item.event!) : undefined}
-                      className="min-h-11 min-w-0 flex-1 text-left"
                       disabled={!item.event}
+                      className="min-h-11 min-w-0 flex-1 text-left"
                     >
-                      <span className="flex items-center gap-2">
-                        <span className="truncate font-medium">{item.title}</span>
-                        <TypeChip type={item.type} />
+                      <span className="block truncate font-medium">{item.title}</span>
+                      <span className="block truncate text-[13px] text-ink2">
+                        {item.kind === 'pago'
+                          ? `${formatLong(item.date)}${item.fixed ? ` · ${formatARS(item.fixed.amount)}` : ''}`
+                          : `${formatLong(item.date)}${item.time ? ` · ${item.time}` : ''} · ${eventTypeLabel(item.type)}`}
                       </span>
-                      <span className="block text-sm text-ink2">{formatShort(item.date)}</span>
                     </button>
                     {item.event && (
-                      <button
-                        type="button"
-                        onClick={() => markOccurrenceDone(item.event!, item.date)}
-                        className="min-h-9 shrink-0 rounded-full bg-accent-soft px-3 text-sm font-semibold text-accent active:opacity-70"
+                      <PillButton onClick={() => markOccurrenceDone(item.event!, item.date)}>
+                        Listo
+                      </PillButton>
+                    )}
+                    {item.fixed && (
+                      <PillButton
+                        onClick={() => setPaying({ fixed: item.fixed!, dueDate: item.date })}
                       >
-                        {item.type === 'pago' ? 'Pagado' : 'Listo'}
-                      </button>
+                        Pagar
+                      </PillButton>
                     )}
                   </div>
                 ))}
@@ -168,62 +337,9 @@ export default function CalendarPage() {
           ))
         ) : (
           <Card>
-            <p className="px-4 py-4 text-sm text-ink2">
-              {loading ? 'Cargando…' : 'Nada agendado para los próximos 14 días.'}
-            </p>
+            <p className="px-4 py-4 text-sm text-ink2">Nada agendado para los próximos 14 días.</p>
           </Card>
         )}
-
-        <div className="mt-6">
-          <MonthGrid
-            year={view.year}
-            month1={view.month1}
-            markedDays={markedDays}
-            selectedDay={selectedDay}
-            onSelectDay={selectDay}
-            onPrev={() => moveMonth(-1)}
-            onNext={() => moveMonth(1)}
-          />
-        </div>
-
-        <SectionTitle>Eventos del mes</SectionTitle>
-        <div ref={monthListRef}>
-          {monthItems.length > 0 ? (
-            <Card>
-              {monthItems.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  data-date={item.date}
-                  onClick={item.event ? () => openEdit(item.event!) : undefined}
-                  disabled={!item.event}
-                  className={`flex min-h-13 w-full items-center gap-3 border-b border-line px-4 py-2.5 text-left last:border-b-0 ${
-                    item.date === selectedDay ? 'bg-accent-soft' : 'bg-card'
-                  } ${item.done ? 'opacity-55' : ''}`}
-                >
-                  <TypeChip type={item.type} />
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={`block truncate font-medium ${item.done ? 'line-through' : ''}`}
-                    >
-                      {item.title}
-                    </span>
-                    <span className="block text-sm text-ink2">{formatShort(item.date)}</span>
-                  </span>
-                  {item.done && <span className="shrink-0 font-semibold text-ok">✓</span>}
-                </button>
-              ))}
-            </Card>
-          ) : loading ? (
-            <p className="px-4 py-10 text-center text-sm text-ink2">Cargando…</p>
-          ) : (
-            <EmptyState
-              icon={<IconCalendar size={40} />}
-              title="Nada este mes"
-              hint="Agregá pagos, turnos o visitas con el + y no se olviden de nada."
-            />
-          )}
-        </div>
       </div>
 
       <FAB
@@ -240,7 +356,9 @@ export default function CalendarPage() {
           setEditing(null)
         }}
         event={editing}
+        defaultDate={selectedDay}
       />
+      <PayFixedSheet due={paying} onClose={() => setPaying(null)} />
     </div>
   )
 }

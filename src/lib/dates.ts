@@ -71,3 +71,13 @@ export function relativeLabel(iso: string): string {
   if (d === -1) return 'Ayer'
   return formatShort(iso)
 }
+
+/** 'Martes 2 de septiembre' */
+export function formatDayLong(iso: string): string {
+  const s = fromISO(iso).toLocaleDateString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}

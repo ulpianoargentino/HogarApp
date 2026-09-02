@@ -4,24 +4,26 @@ import { HouseholdProvider, useHousehold, useHome } from './hooks/useHousehold'
 import { useCollection } from './hooks/useCollection'
 import { computeUpcoming } from './hooks/useUpcoming'
 import { TabBar } from './components/TabBar'
-import type { HouseholdEvent, Warranty } from './types'
+import { monthRange, todayISO } from './lib/dates'
+import type { Expense, FixedExpense, HouseholdEvent } from './types'
 import LoginPage from './features/auth/LoginPage'
 import HogarSetupPage from './features/auth/HogarSetupPage'
 import HomePage from './features/home/HomePage'
 import TasksPage from './features/tasks/TasksPage'
 import ShoppingPage from './features/shopping/ShoppingPage'
-import CalendarPage from './features/calendar/CalendarPage'
-import MorePage from './features/more/MorePage'
 import ExpensesPage from './features/expenses/ExpensesPage'
-import CouplePage from './features/couple/CouplePage'
-import RewardsPage from './features/rewards/RewardsPage'
-import MaintenancePage from './features/maintenance/MaintenancePage'
-import SettingsPage from './features/settings/SettingsPage'
+import CalendarPage from './features/calendar/CalendarPage'
+import NosotrosPage from './features/nosotros/NosotrosPage'
+import PlansPage from './features/nosotros/PlansPage'
+import RewardsPage from './features/nosotros/RewardsPage'
+import ConfigPage from './features/config/ConfigPage'
+import ContactsPage from './features/config/ContactsPage'
+import SettingsPage from './features/config/SettingsPage'
 
 function Splash() {
   return (
     <div className="flex min-h-dvh items-center justify-center">
-      <div className="animate-pulse text-4xl">🏠</div>
+      <div className="h-10 w-10 animate-pulse rounded-2xl bg-brand" />
     </div>
   )
 }
@@ -46,19 +48,28 @@ function RequireHousehold() {
   return <AppShell />
 }
 
-/** Shell con TabBar y badge del calendario */
+/** Shell con TabBar y badge del calendario (eventos + pagos fijos urgentes) */
 function AppShell() {
   const { hid } = useHome()
+  const today = todayISO()
+  const [monthStart, monthEnd] = monthRange(Number(today.slice(0, 4)), Number(today.slice(5, 7)))
   const { data: events } = useCollection<HouseholdEvent>(hid, 'events', {
     orderByField: ['startDate', 'asc'],
   })
-  const { data: warranties } = useCollection<Warranty>(hid, 'warranties', {
-    orderByField: ['expiresAt', 'asc'],
+  const { data: fixed } = useCollection<FixedExpense>(hid, 'fixedExpenses', {
+    orderByField: ['dayOfMonth', 'asc'],
   })
-  const { badgeCount } = computeUpcoming(events, warranties)
+  const { data: expenses } = useCollection<Expense>(hid, 'expenses', {
+    filters: [
+      ['date', '>=', monthStart],
+      ['date', '<=', monthEnd],
+    ],
+    orderByField: ['date', 'desc'],
+  })
+  const { badgeCount } = computeUpcoming(events, fixed, expenses)
 
   return (
-    <div className="mx-auto min-h-dvh max-w-lg pb-24">
+    <div className="mx-auto min-h-dvh max-w-lg pb-28">
       <Outlet />
       <TabBar calendarBadge={badgeCount} />
     </div>
@@ -75,14 +86,17 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/tareas" element={<TasksPage />} />
           <Route path="/compras" element={<ShoppingPage />} />
-          <Route path="/compras/despensa" element={<ShoppingPage />} />
+          <Route path="/compras/provisiones" element={<ShoppingPage />} />
+          <Route path="/gastos" element={<ExpensesPage />} />
           <Route path="/calendario" element={<CalendarPage />} />
-          <Route path="/mas" element={<MorePage />} />
-          <Route path="/mas/gastos" element={<ExpensesPage />} />
-          <Route path="/mas/pareja" element={<CouplePage />} />
-          <Route path="/mas/premios" element={<RewardsPage />} />
-          <Route path="/mas/mantenimiento" element={<MaintenancePage />} />
-          <Route path="/mas/ajustes" element={<SettingsPage />} />
+          <Route path="/nosotros" element={<NosotrosPage />} />
+          <Route path="/nosotros/planes" element={<PlansPage kind="plan" />} />
+          <Route path="/nosotros/cine" element={<PlansPage kind="cine" />} />
+          <Route path="/nosotros/viajes" element={<PlansPage kind="viaje" />} />
+          <Route path="/nosotros/premios" element={<RewardsPage />} />
+          <Route path="/config" element={<ConfigPage />} />
+          <Route path="/config/contactos" element={<ContactsPage />} />
+          <Route path="/config/ajustes" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>

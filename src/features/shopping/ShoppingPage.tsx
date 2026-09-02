@@ -1,31 +1,31 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PageHeader, SegmentedControl } from '../../components/ui'
-import InventoryPanel from '../inventory/InventoryPanel'
+import ProvisionsPanel from './ProvisionsPanel'
 import ShoppingList from './ShoppingList'
 
-type Tab = 'lista' | 'despensa'
+type Tab = 'lista' | 'provisiones'
 
 export default function ShoppingPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const tab: Tab = location.pathname === '/compras/despensa' ? 'despensa' : 'lista'
+  const tab: Tab = location.pathname === '/compras/provisiones' ? 'provisiones' : 'lista'
 
   return (
     <div>
       <PageHeader title="Compras" />
-      <div className="px-4 py-3">
+      <div className="px-4 pt-1 pb-2">
         <SegmentedControl<Tab>
           options={[
             { value: 'lista', label: 'Lista' },
-            { value: 'despensa', label: 'Despensa' },
+            { value: 'provisiones', label: 'Provisiones' },
           ]}
           value={tab}
           onChange={(v) =>
-            navigate(v === 'despensa' ? '/compras/despensa' : '/compras', { replace: true })
+            navigate(v === 'provisiones' ? '/compras/provisiones' : '/compras', { replace: true })
           }
         />
       </div>
-      {tab === 'lista' ? <ShoppingList /> : <InventoryPanel />}
+      {tab === 'lista' ? <ShoppingList /> : <ProvisionsPanel />}
     </div>
   )
 }

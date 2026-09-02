@@ -11,6 +11,7 @@ function makeEvent(
     id: 'e1',
     title: 'Prueba',
     type: 'otro',
+    time: null,
     startDate,
     recurrence,
     endDate,

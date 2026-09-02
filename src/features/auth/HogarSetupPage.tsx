@@ -38,8 +38,13 @@ export default function HogarSetupPage() {
   return (
     <div className="pt-safe pb-safe mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-6">
       <div className="mb-6 text-center">
-        <div className="text-5xl">🏠</div>
-        <h1 className="mt-2 text-2xl font-bold">Tu hogar</h1>
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft text-brand dark:text-accent">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 10.5 12 3l9 7.5" />
+            <path d="M5 9.5V21h5v-6h4v6h5V9.5" />
+          </svg>
+        </div>
+        <h1 className="mt-3 text-2xl font-extrabold">Tu hogar</h1>
         <p className="mt-1 text-ink2">
           Creá un hogar nuevo o unite al que armó tu pareja.
         </p>
@@ -71,7 +76,7 @@ export default function HogarSetupPage() {
         ) : (
           <Field label="Código de invitación">
             <input
-              className={`${inputClass} text-center font-mono text-xl tracking-[0.3em] uppercase`}
+              className={`${inputClass} text-center font-display text-xl font-bold tracking-[0.3em] uppercase`}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="K7M3PQ"

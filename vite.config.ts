@@ -19,8 +19,8 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         scope: '/',
-        theme_color: '#f2f2f7',
-        background_color: '#f2f2f7',
+        theme_color: '#1b2f5b',
+        background_color: '#f3f5f8',
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -37,7 +37,24 @@ export default defineConfig({
         navigateFallback: '/index.html',
         // Los helpers de auth de Firebase (/__/auth/*) nunca deben caer en el SPA fallback
         navigateFallbackDenylist: [/^\/__\//],
-        runtimeCaching: [],
+        runtimeCaching: [
+          {
+            // Hoja de estilos de Google Fonts: rápida y actualizable
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'google-fonts-css' },
+          },
+          {
+            // Archivos de fuente: cache larga para que la PWA abra offline con tipografía
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-files',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

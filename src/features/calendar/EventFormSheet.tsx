@@ -8,17 +8,23 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
-import { Chip, Field, FormSheet, SegmentedControl, inputClass } from '../../components/ui'
-import { IconTrash } from '../../components/icons'
+import {
+  Chip,
+  Field,
+  FormSheet,
+  GhostButton,
+  SegmentedControl,
+  inputClass,
+} from '../../components/ui'
 import { useHome } from '../../hooks/useHousehold'
 import { todayISO } from '../../lib/dates'
 import type { EventRecurrence, EventType, HouseholdEvent } from '../../types'
-import { EVENT_TYPE_OPTIONS } from './eventMeta'
+import { EVENT_TYPE_OPTIONS, TYPE_TEXT } from './eventMeta'
 
 type FreqOption = 'none' | EventRecurrence['freq']
 
 const FREQ_OPTIONS: Array<{ value: FreqOption; label: string }> = [
-  { value: 'none', label: 'No se repite' },
+  { value: 'none', label: 'No' },
   { value: 'weekly', label: 'Semanal' },
   { value: 'monthly', label: 'Mensual' },
   { value: 'yearly', label: 'Anual' },
@@ -31,15 +37,19 @@ export default function EventFormSheet({
   open,
   onClose,
   event,
+  defaultDate,
 }: {
   open: boolean
   onClose: () => void
   event: HouseholdEvent | null
+  /** Fecha precargada al crear (el día seleccionado en la grilla) */
+  defaultDate?: string
 }) {
   const { hid, uid } = useHome()
   const [title, setTitle] = useState('')
   const [type, setType] = useState<EventType>('otro')
   const [date, setDate] = useState(todayISO())
+  const [time, setTime] = useState('')
   const [freq, setFreq] = useState<FreqOption>('none')
   const [remind, setRemind] = useState(3)
   const [notes, setNotes] = useState('')
@@ -49,13 +59,15 @@ export default function EventFormSheet({
     if (!open) return
     setTitle(event?.title ?? '')
     setType(event?.type ?? 'otro')
-    setDate(event?.startDate ?? todayISO())
+    setDate(event?.startDate ?? defaultDate ?? todayISO())
+    setTime(event?.time ?? '')
     setFreq(event?.recurrence?.freq ?? 'none')
     setRemind(event?.remindDaysBefore ?? 3)
     setNotes(event?.notes ?? '')
-  }, [open, event])
+  }, [open, event, defaultDate])
 
   async function handleSubmit() {
+    if (!date) throw new Error('Elegí una fecha.')
     const recurrence: EventRecurrence | null =
       freq === 'none'
         ? null
@@ -68,6 +80,7 @@ export default function EventFormSheet({
       title: title.trim(),
       type,
       startDate: date,
+      time: time || null,
       recurrence,
       remindDaysBefore: remind,
       notes: notes.trim(),
@@ -88,11 +101,15 @@ export default function EventFormSheet({
   async function handleDelete() {
     if (!event) return
     const message = event.recurrence
-      ? `¿Eliminar «${event.title}»? Se borra la serie completa, con todas sus repeticiones.`
+      ? `¿Eliminar «${event.title}»? Es un evento que se repite: se borra la serie completa, con todas sus repeticiones.`
       : `¿Eliminar el evento «${event.title}»?`
     if (!window.confirm(message)) return
-    await deleteDoc(doc(db, 'households', hid, 'events', event.id))
-    onClose()
+    try {
+      await deleteDoc(doc(db, 'households', hid, 'events', event.id))
+      onClose()
+    } catch {
+      alert('No se pudo eliminar. Probá de nuevo.')
+    }
   }
 
   return (
@@ -102,14 +119,21 @@ export default function EventFormSheet({
       title={event ? 'Editar evento' : 'Nuevo evento'}
       onSubmit={handleSubmit}
       submitLabel={event ? 'Guardar cambios' : 'Agregar evento'}
-      canSubmit={title.trim().length > 0}
+      canSubmit={title.trim().length > 0 && date.length > 0}
+      footer={
+        event ? (
+          <GhostButton tone="danger" onClick={handleDelete}>
+            Eliminar evento
+          </GhostButton>
+        ) : undefined
+      }
     >
       <Field label="Título">
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Pagar el alquiler"
+          placeholder="Turno con el dentista"
           className={inputClass}
           autoFocus={!event}
         />
@@ -118,21 +142,37 @@ export default function EventFormSheet({
         <div className="flex gap-2">
           {EVENT_TYPE_OPTIONS.map((o) => (
             <Chip key={o.value} selected={type === o.value} onClick={() => setType(o.value)}>
-              {o.label}
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`h-2 w-2 rounded-full bg-current ${TYPE_TEXT[o.value]}`}
+                  aria-hidden
+                />
+                {o.label}
+              </span>
             </Chip>
           ))}
         </div>
       </Field>
-      <Field label="Fecha">
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          required
-          className={inputClass}
-        />
-      </Field>
-      <Field label="Repetición">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Fecha">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Hora (opcional)">
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+      </div>
+      <Field label="Repetir">
         <SegmentedControl<FreqOption> options={FREQ_OPTIONS} value={freq} onChange={setFreq} />
       </Field>
       <Field label="Avisar días antes">
@@ -153,16 +193,6 @@ export default function EventFormSheet({
           className={inputClass}
         />
       </Field>
-      {event && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="mb-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-danger/40 font-medium text-danger active:opacity-70"
-        >
-          <IconTrash size={18} />
-          Eliminar evento
-        </button>
-      )}
     </FormSheet>
   )
 }

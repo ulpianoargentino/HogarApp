@@ -53,11 +53,11 @@ service cloud.firestore {
       }
 
       function pointsDeltaOk() {
-        // Solo el balance propio, sumas de hasta +50 (tareas) o restas (canjes),
+        // Solo el balance propio, sumas de hasta +500 (tareas) o restas (canjes),
         // nunca por debajo de cero, el del otro intocable.
         let mine = request.resource.data.points[request.auth.uid]
                  - resource.data.points[request.auth.uid];
-        return mine <= 50
+        return mine <= 500
           && request.resource.data.points[request.auth.uid] >= 0
           && otherBalanceUnchanged();
       }

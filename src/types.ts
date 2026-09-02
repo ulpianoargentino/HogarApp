@@ -25,19 +25,54 @@ export interface Household {
   createdAt: Timestamp
 }
 
-// ---------- Tareas y premios ----------
+// ---------- Recurrencia (compartida por eventos, tareas y gastos fijos) ----------
 
+export interface EventRecurrence {
+  freq: 'weekly' | 'monthly' | 'yearly'
+  interval: number
+}
+
+// ---------- Tareas ----------
+
+/** Una tarea concreta de un día. Si viene de una serie, id = `${seriesId}_${date}`. */
 export interface Task {
   id: string
   title: string
   assigneeUid: string
+  date: string // YYYY-MM-DD
   done: boolean
-  points: number // 5 | 10 | 20
+  points: number // libre, entero >= 0
+  seriesId: string | null
   createdBy: string
   createdAt: Timestamp
   completedAt: Timestamp | null
   completedBy: string | null
 }
+
+/** Tarea recurrente: genera una Task por ocurrencia (materializada al ver el día). */
+export interface TaskSeries {
+  id: string
+  title: string
+  assigneeUid: string
+  points: number
+  startDate: string
+  recurrence: EventRecurrence
+  endDate: string | null
+  active: boolean
+  createdBy: string
+  createdAt: Timestamp
+}
+
+/** Tarea frecuente autoaprendida (docId = slug del título) con sus últimos puntos. */
+export interface TaskTemplate {
+  id: string
+  title: string
+  points: number
+  count: number
+  lastUsedAt: Timestamp
+}
+
+// ---------- Premios ----------
 
 export interface Reward {
   id: string
@@ -77,22 +112,45 @@ export interface Expense {
   category: ExpenseCategory
   paidBy: string
   date: string // YYYY-MM-DD
+  kind: 'fijo' | 'variable'
+  /** Si es el pago de un gasto fijo programado */
+  fixedExpenseId: string | null
+  /** Fecha de vencimiento de la ocurrencia que salda (YYYY-MM-DD) */
+  fixedDueDate: string | null
   createdBy: string
   createdAt: Timestamp
 }
 
-// ---------- Compras e inventario ----------
+/** Gasto fijo programado (alquiler, expensas, servicios…): vence todos los meses. */
+export interface FixedExpense {
+  id: string
+  name: string
+  amount: number // monto estimado, se confirma al pagar
+  category: ExpenseCategory
+  dayOfMonth: number // 1-31 (se clampea al último día del mes)
+  startDate: string // primer vencimiento YYYY-MM-DD
+  endDate: string | null
+  paidBy: string | null // quién suele pagarlo
+  remindDaysBefore: number
+  active: boolean
+  createdBy: string
+  createdAt: Timestamp
+}
+
+// ---------- Compras y provisiones ----------
 
 export interface ShoppingItem {
   id: string
   name: string
   nameNorm: string
-  checked: boolean
   addedBy: string
   createdAt: Timestamp
-  checkedAt: Timestamp | null
+  /** Si vino de Provisiones (para devolverlo a "Hay" al comprarlo) */
   fromInventoryId: string | null
 }
+
+export type InventoryLocation = 'heladera' | 'despensa' | 'limpieza'
+export type InventoryStatus = 'ok' | 'comprar'
 
 export interface Product {
   id: string // slug
@@ -100,15 +158,15 @@ export interface Product {
   nameNorm: string
   count: number
   lastUsedAt: Timestamp
+  /** Categoría recordada de Provisiones (null hasta la primera vez) */
+  location: InventoryLocation | null
 }
-
-export type InventoryStatus = 'ok' | 'low' | 'out'
 
 export interface InventoryItem {
   id: string
   name: string
   nameNorm: string
-  location: 'heladera' | 'despensa'
+  location: InventoryLocation
   status: InventoryStatus
   updatedAt: Timestamp
   linkedShoppingItemId: string | null
@@ -118,16 +176,12 @@ export interface InventoryItem {
 
 export type EventType = 'pago' | 'salud' | 'visita' | 'otro'
 
-export interface EventRecurrence {
-  freq: 'weekly' | 'monthly' | 'yearly'
-  interval: number
-}
-
 export interface HouseholdEvent {
   id: string
   title: string
   type: EventType
   startDate: string // YYYY-MM-DD
+  time: string | null // HH:MM opcional
   recurrence: EventRecurrence | null
   endDate: string | null
   remindDaysBefore: number
@@ -137,9 +191,9 @@ export interface HouseholdEvent {
   createdAt: Timestamp
 }
 
-// ---------- Modo pareja ----------
+// ---------- Nosotros ----------
 
-export type PlanKind = 'plan' | 'serie' | 'escapada'
+export type PlanKind = 'plan' | 'cine' | 'viaje'
 
 export interface CouplePlan {
   id: string
@@ -152,26 +206,7 @@ export interface CouplePlan {
   doneAt: Timestamp | null
 }
 
-// ---------- Mantenimiento ----------
-
-export interface Repair {
-  id: string
-  title: string
-  date: string // YYYY-MM-DD
-  cost: number | null
-  status: 'pendiente' | 'hecho'
-  notes: string
-  createdAt: Timestamp
-}
-
-export interface Warranty {
-  id: string
-  item: string
-  store: string | null
-  expiresAt: string // YYYY-MM-DD
-  notes: string
-  createdAt: Timestamp
-}
+// ---------- Configuración ----------
 
 export interface HomeContact {
   id: string

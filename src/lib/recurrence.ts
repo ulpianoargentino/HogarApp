@@ -17,8 +17,10 @@ function clampedISO(year: number, month1: number, day: number): string {
  * Fechas ISO (YYYY-MM-DD) de las ocurrencias de un evento dentro del rango
  * [fromISO, toISO] inclusive. Nunca antes de startDate ni después de endDate.
  */
+export type RecurringLike = Pick<HouseholdEvent, 'startDate' | 'recurrence' | 'endDate'>
+
 export function occurrencesBetween(
-  event: HouseholdEvent,
+  event: RecurringLike,
   fromISO: string,
   toISO: string,
 ): string[] {

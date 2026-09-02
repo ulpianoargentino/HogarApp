@@ -1,6 +1,22 @@
 # 🏠 HogarApp
 
-PWA para administrar un hogar **entre dos personas**: tareas, gastos compartidos, lista de compras en tiempo real, calendario con vencimientos, inventario de heladera/despensa, modo pareja, puntos canjeables y rincón de mantenimiento. Pensada para instalarse desde Safari en dos iPhones ("Agregar a inicio") y sincronizarse al instante entre ambos.
+PWA para administrar un hogar **entre dos personas**: tareas por día con recurrencia y puntos, gastos fijos y variables, lista de compras en tiempo real con provisiones (heladera, despensa, limpieza), calendario del hogar, espacio "Nosotros" (planes, cine, viajes y premios canjeables) y contactos útiles. Pensada para instalarse desde Safari en dos iPhones ("Agregar a inicio") y sincronizarse al instante entre ambos.
+
+## Pantallas
+
+| Pestaña | Qué hace |
+|---|---|
+| **Inicio** | Resumen de hoy: tareas del día (se completan desde ahí), agenda con eventos y pagos que vencen, gastos del mes, puntos de ambos y tareas atrasadas. La ruedita lleva a Configuración. |
+| **Tareas** | Organizadas por día (tira semanal). Tareas recurrentes ("cambiar sábanas cada 2 semanas") que aparecen solas, puntos libres por tarea y plantillas autoaprendidas con sus puntos. Los pagos fijos del día aparecen para registrarlos. |
+| **Compras** | Lista colaborativa con autocompletado. Lo que tildás pasa solo a **Provisiones** (Heladera / Despensa / Limpieza); marcar "Comprar" lo devuelve a la lista. |
+| **Gastos** | Total del mes con proporción fijos/variables. **Gastos fijos programados** (alquiler, expensas, servicios…) con vencimiento mensual, recordatorio en el calendario y registro del pago en un toque. |
+| **Calendario** | Grilla del mes; al tocar un día se ven sus eventos, tareas y pagos. Debajo, los próximos 14 días. |
+| **Nosotros** | Planes, Cine, Viajes y Premios (canje de puntos entre los dos). |
+| **Configuración** | Contactos del hogar (plomero, electricista…) y Ajustes (hogar, código de invitación, cuenta). |
+
+## Diseño
+
+Identidad "Marino y plata": azul marino de marca, fondo plata, celeste de acento; tipografías Hanken Grotesk (títulos) y Figtree (texto), íconos SVG propios, modo oscuro automático. El proyecto trae instalada la skill [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) en `.claude/skills/` para seguir iterando el diseño con Claude Code.
 
 ## Stack
 
@@ -67,6 +83,10 @@ Las reglas de Firestore (`firestore.rules`) garantizan que:
 
 > Limitación conocida (plan gratuito, sin Cloud Functions): las reglas acotan el delta de puntos pero no pueden verificar transaccionalmente que coincida con los puntos de la tarea completada. Entre dos personas de confianza, el historial es la trazabilidad.
 
+## Modo demo
+
+`npm run build:demo` genera `dist-demo/demo.html`: la app completa en un solo archivo, sin Firebase (datos de ejemplo guardados en el navegador). Sirve para probarla o mostrarla sin configurar nada.
+
 ## Recordatorios
 
-Los vencimientos y turnos se muestran **dentro de la app** (sección "Próximos" y badge en Calendario). El modelo de datos ya queda preparado para sumar notificaciones push reales (Firebase Cloud Messaging + Cloud Functions, requiere plan Blaze) sin cambiar el esquema.
+Los vencimientos, turnos y pagos fijos se muestran **dentro de la app** (Inicio, "Próximos" en Calendario y badge en la pestaña). El modelo de datos ya queda preparado para sumar notificaciones push reales (Firebase Cloud Messaging + Cloud Functions, requiere plan Blaze) sin cambiar el esquema.

@@ -3,7 +3,7 @@
 // localStorage del navegador. No se usa en producción: se activa solo vía
 // alias de módulos en vite.demo.config.ts.
 
-const LS_KEY = 'hogarapp-demo-v1'
+const LS_KEY = 'hogarapp-demo-v2'
 
 // ---------- Timestamp ----------
 
