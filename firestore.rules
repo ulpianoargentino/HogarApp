@@ -12,8 +12,9 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      // La pareja necesita poder leer el perfil del otro
-      allow read: if signedIn();
+      // Solo el propio doc, y nunca listado: el nombre y la foto de la pareja
+      // se leen de households/{hid}.memberProfiles, no de acá.
+      allow get: if signedIn() && request.auth.uid == uid;
       allow create, update: if signedIn() && request.auth.uid == uid;
     }
 

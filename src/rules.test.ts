@@ -8,7 +8,16 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
 import { readFileSync } from 'node:fs'
-import { deleteDoc, deleteField, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore'
 
 let env: RulesTestEnvironment
 
@@ -249,6 +258,24 @@ describe('subcolecciones', () => {
     )
     await assertFails(updateDoc(ref, { cost: 1 }))
     await assertFails(deleteDoc(ref))
+  })
+})
+
+describe('users', () => {
+  it('cada uno lee y escribe solo su propio doc', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ANA), 'users', ANA), { householdId: null, displayName: 'Ana' }),
+    )
+    await assertSucceeds(getDoc(doc(db(ANA), 'users', ANA)))
+    await assertFails(getDoc(doc(db(BRUNO), 'users', ANA)))
+    await assertFails(setDoc(doc(db(BRUNO), 'users', ANA), { displayName: 'X' }))
+  })
+
+  it('no se puede listar la colección de usuarios', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', ANA), { email: 'ana@example.com' })
+    })
+    await assertFails(getDocs(collection(db(INTRUSO), 'users')))
   })
 })
 

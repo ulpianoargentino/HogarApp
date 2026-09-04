@@ -54,6 +54,20 @@ firebase deploy                    # sube reglas de Firestore + hosting
 
 La app queda en `https://<project-id>.web.app`.
 
+### 3b. (Opcional) Deploy automático desde GitHub
+
+`.github/workflows/deploy.yml` publica sola cada vez que algo llega a `main`, sin
+necesidad de ninguna computadora. Requiere cargar en **Settings → Secrets and
+variables → Actions** del repo:
+
+| Secret | De dónde sale |
+|---|---|
+| `FIREBASE_SERVICE_ACCOUNT` | JSON de una cuenta de servicio de Google Cloud con los roles **Firebase Hosting Admin**, **Firebase Rules Admin** y **Service Usage Consumer** |
+| `VITE_FB_API_KEY`, `VITE_FB_AUTH_DOMAIN`, `VITE_FB_PROJECT_ID`, `VITE_FB_APP_ID`, `VITE_FB_SENDER_ID` | los mismos valores del `.env.local` |
+
+Publica `hosting` **y** `firestore:rules`: si solo se subiera el hosting, las
+funciones nuevas quedarían bloqueadas por reglas viejas.
+
 ### 4. Instalar en los iPhones
 
 1. Abrí la URL en **Safari** → iniciá sesión con Google.
@@ -79,6 +93,7 @@ Otros comandos: `npm run build` (typecheck + build), `npm test` (vitest), `npm r
 
 Las reglas de Firestore (`firestore.rules`) garantizan que:
 
+- Cada uno lee y escribe **solo su propio** doc de usuario; la colección `users` no se puede listar (el nombre y la foto de la pareja salen de `memberProfiles` del hogar).
 - Solo los **miembros del hogar** leen/escriben sus datos; máximo **2 miembros**.
 - Unirse requiere el **código de invitación** (solo lectura puntual por código exacto, nunca listado).
 - Los **puntos** solo pueden moverse sobre el balance propio, con delta acotado y sin quedar negativos; el historial de canjes es inmutable.
