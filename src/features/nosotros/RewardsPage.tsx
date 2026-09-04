@@ -110,7 +110,7 @@ export default function RewardsPage() {
   return (
     <div>
       <PageHeader title="Premios" onBack={() => navigate('/nosotros')} />
-      <div className="px-4 pt-3 pb-28">
+      <div className="px-4 pt-3 pb-6">
         <Card className="px-4 py-3">
           <div className="grid grid-cols-2 divide-x divide-line">
             <Balance profile={myProfile} fallback="Vos" points={myPoints} />

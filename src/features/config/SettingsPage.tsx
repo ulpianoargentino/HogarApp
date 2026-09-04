@@ -25,9 +25,10 @@ function Points({ value }: { value: number }) {
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { household, uid, myProfile, partnerProfile, partnerUid } = useHome()
+  const { household, uid, myProfile, partnerProfile, partnerUid, leaveHousehold } = useHome()
   const { signOut } = useAuth()
   const [copied, setCopied] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   async function copyCode() {
     try {
@@ -52,10 +53,25 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleLeave() {
+    const message = partnerUid
+      ? `¿Salir de "${household.name}"? Dejás de ver las tareas, compras y gastos compartidos. Tu pareja sigue con el hogar y podés volver con el mismo código.`
+      : `¿Salir de "${household.name}"? Como estás solo en este hogar, se borra junto con su código. Después vas a poder unirte al de tu pareja.`
+    if (!window.confirm(message)) return
+    setLeaving(true)
+    try {
+      await leaveHousehold()
+      navigate('/hogar', { replace: true })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo salir del hogar.')
+      setLeaving(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Ajustes" onBack={() => navigate('/config')} />
-      <div className="px-4 pb-28">
+      <div className="px-4 pb-6">
         <SectionTitle>Hogar</SectionTitle>
         <Card>
           <ListRow
@@ -79,7 +95,7 @@ export default function SettingsPage() {
               </span>
             }
             subtitle={
-              partnerUid ? 'Código de invitación (ya son dos)' : 'Compartí este código con tu pareja'
+              partnerUid ? 'Código de invitación (ya son dos)' : 'Compartilo con tu pareja'
             }
             right={
               <button
@@ -121,8 +137,30 @@ export default function SettingsPage() {
           )}
         </Card>
 
+        {!partnerUid && (
+          <p className="mt-2 px-1 text-[13px] leading-snug text-ink2">
+            Un hogar se comparte de a dos: uno lo crea y el otro entra con el código, sin
+            crear el suyo. Si cada uno creó el propio, el que quiera mudarse toca{' '}
+            <span className="font-semibold">Salir del hogar</span> y después usa el código
+            del otro.
+          </p>
+        )}
+
         <SectionTitle>Cuenta</SectionTitle>
         <Card>
+          <ListRow
+            onClick={leaving ? undefined : handleLeave}
+            title={
+              <span className="text-danger">
+                {leaving ? 'Saliendo…' : 'Salir del hogar'}
+              </span>
+            }
+            subtitle={
+              partnerUid
+                ? 'Para unirte a otro hogar con un código'
+                : 'Borra este hogar y te deja unirte al de tu pareja'
+            }
+          />
           <ListRow onClick={signOut} title={<span className="text-danger">Cerrar sesión</span>} />
         </Card>
 

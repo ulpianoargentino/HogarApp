@@ -33,6 +33,8 @@ export class Timestamp {
 
 const INCREMENT = Symbol('increment')
 const ARRAY_UNION = Symbol('arrayUnion')
+const ARRAY_REMOVE = Symbol('arrayRemove')
+const DELETE_FIELD = Symbol('deleteField')
 const SERVER_TS = Symbol('serverTimestamp')
 
 export function increment(n: number) {
@@ -40,6 +42,12 @@ export function increment(n: number) {
 }
 export function arrayUnion(...values: unknown[]) {
   return { __op: ARRAY_UNION, values }
+}
+export function arrayRemove(...values: unknown[]) {
+  return { __op: ARRAY_REMOVE, values }
+}
+export function deleteField() {
+  return { __op: DELETE_FIELD }
 }
 export function serverTimestamp() {
   return { __op: SERVER_TS }
@@ -191,8 +199,18 @@ function resolveValue(prev: unknown, v: unknown): unknown {
       }
       return arr
     }
+    if (op === ARRAY_REMOVE) {
+      const drop = (v as { values: unknown[] }).values.map((x) => JSON.stringify(x))
+      const arr = Array.isArray(prev) ? prev : []
+      return arr.filter((x) => !drop.includes(JSON.stringify(x)))
+    }
+    if (op === DELETE_FIELD) return DELETE_FIELD
   }
   return v
+}
+
+function isDeleteField(v: unknown) {
+  return v === DELETE_FIELD
 }
 
 function applyFields(target: DocData, data: DocData) {
@@ -206,9 +224,13 @@ function applyFields(target: DocData, data: DocData) {
         obj = obj[p] as DocData
       }
       const last = parts[parts.length - 1]
-      obj[last] = resolveValue(obj[last], value)
+      const next = resolveValue(obj[last], value)
+      if (isDeleteField(next)) delete obj[last]
+      else obj[last] = next
     } else {
-      target[key] = resolveValue(target[key], value)
+      const next = resolveValue(target[key], value)
+      if (isDeleteField(next)) delete target[key]
+      else target[key] = next
     }
   }
 }

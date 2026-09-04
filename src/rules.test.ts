@@ -8,7 +8,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
 import { readFileSync } from 'node:fs'
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { deleteDoc, deleteField, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 
 let env: RulesTestEnvironment
 
@@ -119,18 +119,84 @@ describe('households: creación y join', () => {
   })
 })
 
-describe('households: puntos', () => {
-  beforeEach(() => seedHousehold([ANA, BRUNO], { [ANA]: 10, [BRUNO]: 40 }))
-
-  it('permite sumarse hasta +50 al balance propio', async () => {
+describe('households: salir del hogar', () => {
+  it('permite sacarse a uno mismo dejando al otro adentro', async () => {
+    await seedHousehold([ANA, BRUNO], { [ANA]: 10, [BRUNO]: 40 })
     await assertSucceeds(
-      updateDoc(doc(db(ANA), 'households', HID), { [`points.${ANA}`]: 30 }),
+      updateDoc(doc(db(BRUNO), 'households', HID), {
+        members: [ANA],
+        [`memberProfiles.${BRUNO}`]: deleteField(),
+        [`points.${BRUNO}`]: deleteField(),
+      }),
     )
   })
 
-  it('rechaza un delta mayor a +50', async () => {
+  it('rechaza sacar a la pareja', async () => {
+    await seedHousehold([ANA, BRUNO], { [ANA]: 10, [BRUNO]: 40 })
     await assertFails(
-      updateDoc(doc(db(ANA), 'households', HID), { [`points.${ANA}`]: 100 }),
+      updateDoc(doc(db(ANA), 'households', HID), {
+        members: [ANA],
+        [`memberProfiles.${BRUNO}`]: deleteField(),
+        [`points.${BRUNO}`]: deleteField(),
+      }),
+    )
+  })
+
+  it('rechaza irse tocando el balance de la pareja', async () => {
+    await seedHousehold([ANA, BRUNO], { [ANA]: 10, [BRUNO]: 40 })
+    await assertFails(
+      updateDoc(doc(db(BRUNO), 'households', HID), {
+        members: [ANA],
+        [`memberProfiles.${BRUNO}`]: deleteField(),
+        [`points.${BRUNO}`]: deleteField(),
+        [`points.${ANA}`]: 9999,
+      }),
+    )
+  })
+
+  it('permite borrar el hogar si quedás solo, y su código', async () => {
+    await seedHousehold([ANA], { [ANA]: 0 })
+    await assertSucceeds(deleteDoc(doc(db(ANA), 'invites', CODE)))
+    await assertSucceeds(deleteDoc(doc(db(ANA), 'households', HID)))
+  })
+
+  it('rechaza borrar un hogar de a dos, y el código si no sos miembro', async () => {
+    await seedHousehold([ANA, BRUNO], { [ANA]: 0, [BRUNO]: 0 })
+    await assertFails(deleteDoc(doc(db(ANA), 'households', HID)))
+    await assertFails(deleteDoc(doc(db(INTRUSO), 'invites', CODE)))
+  })
+
+  it('el hogar que quedó con uno vuelve a aceptar a la pareja', async () => {
+    await seedHousehold([ANA, BRUNO], { [ANA]: 0, [BRUNO]: 0 })
+    await assertSucceeds(
+      updateDoc(doc(db(BRUNO), 'households', HID), {
+        members: [ANA],
+        [`memberProfiles.${BRUNO}`]: deleteField(),
+        [`points.${BRUNO}`]: deleteField(),
+      }),
+    )
+    await assertSucceeds(
+      updateDoc(doc(db(BRUNO), 'households', HID), {
+        members: [ANA, BRUNO],
+        [`memberProfiles.${BRUNO}`]: { name: 'Bruno', photoURL: null },
+        [`points.${BRUNO}`]: 0,
+      }),
+    )
+  })
+})
+
+describe('households: puntos', () => {
+  beforeEach(() => seedHousehold([ANA, BRUNO], { [ANA]: 10, [BRUNO]: 40 }))
+
+  it('permite sumarse hasta +500 al balance propio', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(ANA), 'households', HID), { [`points.${ANA}`]: 510 }),
+    )
+  })
+
+  it('rechaza un delta mayor a +500', async () => {
+    await assertFails(
+      updateDoc(doc(db(ANA), 'households', HID), { [`points.${ANA}`]: 600 }),
     )
   })
 

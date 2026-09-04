@@ -123,7 +123,7 @@ export default function PlansPage({ kind }: { kind: PlanKind }) {
   return (
     <div>
       <PageHeader title={copy.title} subtitle={copy.subtitle} onBack={() => navigate('/nosotros')} />
-      <div className="px-4 pt-3 pb-28">
+      <div className="px-4 pt-3 pb-6">
         {ideas.length > 0 && <Card>{ideas.map(renderRow)}</Card>}
 
         {isEmpty &&

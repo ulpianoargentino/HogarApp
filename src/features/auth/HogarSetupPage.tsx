@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useHousehold } from '../../hooks/useHousehold'
 import { useAuth } from '../../hooks/useAuth'
 import { Field, inputClass, SegmentedControl, SubmitButton } from '../../components/ui'
+import { INVITE_CODE_LENGTH, normalizeInviteCode } from '../../lib/inviteCode'
 
 export default function HogarSetupPage() {
   const { userDoc, household, loading, createHousehold, joinHousehold } = useHousehold()
@@ -33,7 +34,8 @@ export default function HogarSetupPage() {
     }
   }
 
-  const canSubmit = mode === 'crear' ? name.trim().length >= 2 : code.trim().length >= 4
+  const canSubmit =
+    mode === 'crear' ? name.trim().length >= 2 : code.length === INVITE_CODE_LENGTH
 
   return (
     <div className="pt-safe pb-safe mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-6">
@@ -47,6 +49,10 @@ export default function HogarSetupPage() {
         <h1 className="mt-3 text-2xl font-extrabold">Tu hogar</h1>
         <p className="mt-1 text-ink2">
           Creá un hogar nuevo o unite al que armó tu pareja.
+        </p>
+        <p className="mt-2 text-[13px] leading-snug text-ink2">
+          El hogar lo crea una sola persona. La otra entra con el código en vez de crear
+          el suyo: así comparten tareas, compras y gastos.
         </p>
       </div>
 
@@ -78,11 +84,14 @@ export default function HogarSetupPage() {
             <input
               className={`${inputClass} text-center font-display text-xl font-bold tracking-[0.3em] uppercase`}
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              onChange={(e) => setCode(normalizeInviteCode(e.target.value))}
               placeholder="K7M3PQ"
-              maxLength={6}
+              maxLength={INVITE_CODE_LENGTH}
               autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
               autoComplete="off"
+              autoFocus
             />
           </Field>
         )}

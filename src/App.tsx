@@ -69,7 +69,7 @@ function AppShell() {
   const { badgeCount } = computeUpcoming(events, fixed, expenses)
 
   return (
-    <div className="mx-auto min-h-dvh max-w-lg pb-28">
+    <div className="pb-tab mx-auto min-h-dvh max-w-lg">
       <Outlet />
       <TabBar calendarBadge={badgeCount} />
     </div>

@@ -9,7 +9,7 @@ export default function ConfigPage() {
   return (
     <div>
       <PageHeader title="Configuración" onBack={() => navigate('/')} />
-      <div className="flex flex-col gap-3 px-4 pt-3 pb-28">
+      <div className="flex flex-col gap-3 px-4 pt-3 pb-6">
         <MenuButton
           icon={<IconPhone size={22} />}
           title="Contactos"

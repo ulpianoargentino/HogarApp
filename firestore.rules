@@ -26,6 +26,8 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.auth.uid in
            getAfter(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.members;
+      // Se borra junto con el hogar cuando el último integrante lo abandona
+      allow delete: if isMember(resource.data.householdId);
     }
 
     match /households/{hid} {
@@ -52,6 +54,19 @@ service cloud.firestore {
           || request.resource.data.points[otherUid()] == resource.data.points[otherUid()];
       }
 
+      function isLeave() {
+        // Un integrante se saca EXACTAMENTE a sí mismo (nunca al otro) y se
+        // lleva su perfil y su balance; lo del otro queda intacto.
+        return request.auth.uid in resource.data.members
+          && request.resource.data.members ==
+             resource.data.members.removeAll([request.auth.uid])
+          && !(request.auth.uid in request.resource.data.points)
+          && !(request.auth.uid in request.resource.data.memberProfiles)
+          && otherBalanceUnchanged()
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['members', 'memberProfiles', 'points']);
+      }
+
       function pointsDeltaOk() {
         // Solo el balance propio, sumas de hasta +500 (tareas) o restas (canjes),
         // nunca por debajo de cero, el del otro intocable.
@@ -76,7 +91,11 @@ service cloud.firestore {
         && request.resource.data.members == [request.auth.uid]
         && request.resource.data.points[request.auth.uid] == 0;
 
-      allow update: if signedIn() && (isJoin() || isMemberEdit());
+      allow update: if signedIn() && (isJoin() || isLeave() || isMemberEdit());
+
+      // Si te quedaste solo, podés borrar el hogar (p.ej. lo creaste por error
+      // y querés unirte al de tu pareja). Nunca se borra un hogar de a dos.
+      allow delete: if signedIn() && resource.data.members == [request.auth.uid];
 
       // Historial de canjes: solo lectura y alta propia, nunca editar/borrar
       match /redemptions/{id} {
