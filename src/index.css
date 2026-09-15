@@ -130,10 +130,15 @@ a {
 
 /* Utilidades de safe-area (notch / home indicator) */
 @utility pt-safe {
-  padding-top: env(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 @utility pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* Espacio libre bajo el contenido para que la TabBar no lo tape.
+   Incluye el home indicator: en pantallas grandes la barra es más alta. */
+@utility pb-tab {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 dialog::backdrop {

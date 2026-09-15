@@ -195,7 +195,7 @@ export default function TasksPage() {
         />
       </div>
 
-      <div className="px-4 pt-2 pb-28">
+      <div className="px-4 pt-2 pb-6">
         {isEmpty ? (
           tasksLoading ? (
             <p className="px-4 py-14 text-center text-sm text-ink2">Cargando…</p>

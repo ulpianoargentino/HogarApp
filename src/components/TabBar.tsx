@@ -21,7 +21,7 @@ export function TabBar({ calendarBadge = 0 }: { calendarBadge?: number }) {
   return (
     <nav
       aria-label="Secciones"
-      className="pb-safe fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg/95 backdrop-blur-md"
+      className="pb-safe fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card/95 backdrop-blur-md"
     >
       <div className="mx-auto flex max-w-lg px-1">
         {tabs.map(({ to, label, icon: Icon, end }) => (

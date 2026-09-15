@@ -50,7 +50,7 @@ export default function ContactsPage() {
   return (
     <div>
       <PageHeader title="Contactos" onBack={() => navigate('/config')} />
-      <div className="px-4 pt-3 pb-28">
+      <div className="px-4 pt-3 pb-6">
         {sorted.length > 0 ? (
           <Card>
             {sorted.map((contact) => (

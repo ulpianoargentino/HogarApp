@@ -7,8 +7,10 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  arrayRemove,
   arrayUnion,
   collection,
+  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -17,7 +19,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { generateInviteCode } from '../lib/inviteCode'
+import { generateInviteCode, normalizeInviteCode } from '../lib/inviteCode'
 import { useAuth } from './useAuth'
 import type { Household, MemberProfile, UserDoc } from '../types'
 
@@ -32,6 +34,8 @@ interface HouseholdContextValue {
   partnerProfile: MemberProfile | null
   createHousehold: (name: string) => Promise<void>
   joinHousehold: (code: string) => Promise<void>
+  /** Salir del hogar actual para poder crear otro o unirse al de la pareja */
+  leaveHousehold: () => Promise<void>
 }
 
 const HouseholdContext = createContext<HouseholdContextValue | null>(null)
@@ -42,6 +46,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const [userDoc, setUserDoc] = useState<UserDoc | null>(null)
   const [userDocLoaded, setUserDocLoaded] = useState(false)
   const [household, setHousehold] = useState<Household | null>(null)
+  const [householdLoaded, setHouseholdLoaded] = useState(false)
 
   // Asegurar el doc de usuario y suscribirse a él
   useEffect(() => {
@@ -74,13 +79,27 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   // Suscripción al hogar cuando hay householdId
   const hid = userDoc?.householdId ?? null
   useEffect(() => {
+    setHousehold(null)
     if (!hid) {
-      setHousehold(null)
+      setHouseholdLoaded(true)
       return
     }
-    return onSnapshot(doc(db, 'households', hid), (snap) => {
-      if (snap.exists()) setHousehold({ id: snap.id, ...snap.data() } as Household)
-    })
+    setHouseholdLoaded(false)
+    // El hogar puede dejar de existir (lo borró quien lo creó) o dejar de ser
+    // legible (salimos de él): en los dos casos hay que terminar de "cargar"
+    // igual, si no la app se queda para siempre en el splash.
+    return onSnapshot(
+      doc(db, 'households', hid),
+      (snap) => {
+        setHousehold(snap.exists() ? ({ id: snap.id, ...snap.data() } as Household) : null)
+        setHouseholdLoaded(true)
+      },
+      (err) => {
+        console.error('household snapshot', err)
+        setHousehold(null)
+        setHouseholdLoaded(true)
+      },
+    )
   }, [hid])
 
   async function createHousehold(name: string) {
@@ -110,12 +129,26 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   }
 
   async function joinHousehold(rawCode: string) {
-    const code = rawCode.trim().toUpperCase()
+    const code = normalizeInviteCode(rawCode)
+    if (code.length < 4) {
+      throw new Error('El código tiene 6 caracteres. Revisalo y probá de nuevo.')
+    }
     const inviteSnap = await getDoc(doc(db, 'invites', code))
     if (!inviteSnap.exists()) {
-      throw new Error('Código inválido. Revisá que esté bien escrito.')
+      throw new Error(
+        'Ese código no existe. Copialo tal cual aparece en Ajustes del hogar de tu pareja.',
+      )
     }
     const targetHid = inviteSnap.data().householdId as string
+    if (targetHid === hid) {
+      throw new Error('Ya estás en ese hogar.')
+    }
+    if (hid) {
+      // Con un hogar propio encima, el join siempre fallaría: hay que salir antes.
+      throw new Error(
+        'Ya tenés un hogar. Salí de él desde Ajustes y después usá el código.',
+      )
+    }
     const profile: MemberProfile = {
       name: user!.displayName ?? 'Sin nombre',
       photoURL: user!.photoURL ?? null,
@@ -131,10 +164,38 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     batch.set(doc(db, 'users', uid), { householdId: targetHid }, { merge: true })
     try {
       await batch.commit()
-    } catch {
+    } catch (err) {
+      console.error('joinHousehold', err)
       throw new Error(
-        'No pudimos unirte: ese hogar ya tiene dos personas o el código no es válido.',
+        'No pudimos unirte: ese hogar ya tiene dos personas. Pedile a tu pareja que revise Ajustes.',
       )
+    }
+  }
+
+  /**
+   * Salir del hogar actual. Si quedabas solo, el hogar y su código se borran
+   * (el caso típico: cada uno creó el suyo y quieren compartir uno solo).
+   */
+  async function leaveHousehold() {
+    if (!hid) return
+    const alone = !household || household.members.length <= 1
+    const batch = writeBatch(db)
+    if (alone) {
+      batch.delete(doc(db, 'households', hid))
+      if (household?.inviteCode) batch.delete(doc(db, 'invites', household.inviteCode))
+    } else {
+      batch.update(doc(db, 'households', hid), {
+        members: arrayRemove(uid),
+        [`memberProfiles.${uid}`]: deleteField(),
+        [`points.${uid}`]: deleteField(),
+      })
+    }
+    batch.set(doc(db, 'users', uid), { householdId: null }, { merge: true })
+    try {
+      await batch.commit()
+    } catch (err) {
+      console.error('leaveHousehold', err)
+      throw new Error('No pudimos sacarte del hogar. Probá de nuevo en un momento.')
     }
   }
 
@@ -144,15 +205,16 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       uid,
       userDoc,
       household,
-      loading: !userDocLoaded || (hid !== null && household === null),
+      loading: !userDocLoaded || !householdLoaded,
       partnerUid,
       myProfile: household?.memberProfiles[uid] ?? null,
       partnerProfile: partnerUid ? (household?.memberProfiles[partnerUid] ?? null) : null,
       createHousehold,
       joinHousehold,
+      leaveHousehold,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid, userDoc, household, userDocLoaded, hid])
+  }, [uid, userDoc, household, userDocLoaded, householdLoaded, hid])
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>
 }

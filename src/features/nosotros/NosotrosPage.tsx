@@ -33,7 +33,7 @@ export default function NosotrosPage() {
   return (
     <div>
       <PageHeader title="Nosotros" subtitle="El espacio de ustedes dos" />
-      <div className="flex flex-col gap-3 px-4 pt-3 pb-28">
+      <div className="flex flex-col gap-3 px-4 pt-3 pb-6">
         <MenuButton
           icon={<IconSparkle size={22} />}
           title="Planes"

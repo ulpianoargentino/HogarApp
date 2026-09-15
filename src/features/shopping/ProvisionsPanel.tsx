@@ -236,7 +236,7 @@ export default function ProvisionsPanel() {
   const editing = sheet?.mode === 'edit' ? sheet.item : null
 
   return (
-    <div className="px-4 pb-28">
+    <div className="px-4 pb-6">
       {loading && items.length === 0 && (
         <p className="px-4 py-14 text-center text-sm text-ink2">Cargando…</p>
       )}

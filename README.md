@@ -54,11 +54,36 @@ firebase deploy                    # sube reglas de Firestore + hosting
 
 La app queda en `https://<project-id>.web.app`.
 
+### 3b. (Opcional) Deploy automático desde GitHub
+
+`.github/workflows/deploy.yml` publica sola cada vez que algo llega a `main`, sin
+necesidad de ninguna computadora. Requiere cargar en **Settings → Secrets and
+variables → Actions** del repo:
+
+Se autentica con **Workload Identity Federation** (sin llaves descargadas: GitHub
+canjea su token OIDC por credenciales temporales de Google). Es lo único que
+funciona en organizaciones con `iam.disableServiceAccountKeyCreation`, la
+restricción que traen por defecto las organizaciones nuevas.
+
+| Secret | De dónde sale |
+|---|---|
+| `GCP_WIF_PROVIDER` | `projects/<número de proyecto>/locations/global/workloadIdentityPools/github/providers/github` |
+| `GCP_SERVICE_ACCOUNT` | `github-deploy@<project-id>.iam.gserviceaccount.com`, con los roles **Firebase Hosting Admin**, **Firebase Rules Admin** y **Service Usage Consumer** |
+| `VITE_FB_API_KEY`, `VITE_FB_AUTH_DOMAIN`, `VITE_FB_PROJECT_ID`, `VITE_FB_APP_ID`, `VITE_FB_SENDER_ID` | los mismos valores del `.env.local` |
+
+La cuenta de servicio necesita además **Workload Identity User** otorgado al
+principal `principalSet://iam.googleapis.com/projects/<número>/locations/global/workloadIdentityPools/github/attribute.repository/<owner>/<repo>`.
+
+Publica `hosting` **y** `firestore:rules`: si solo se subiera el hosting, las
+funciones nuevas quedarían bloqueadas por reglas viejas.
+
 ### 4. Instalar en los iPhones
 
 1. Abrí la URL en **Safari** → iniciá sesión con Google.
 2. Compartir → **Agregar a pantalla de inicio**.
-3. La primera persona crea el hogar; la segunda entra con el **código de invitación** (se comparte desde Ajustes).
+3. La primera persona crea el hogar; la segunda entra con el **código de invitación** (se comparte desde Ajustes) **en vez de crear el suyo**.
+
+> Si cada uno creó su propio hogar, no hace falta empezar de cero: quien quiera mudarse entra en **Ajustes → Salir del hogar** (si estaba solo, su hogar se borra) y después usa el código del otro.
 
 ## Desarrollo local
 
@@ -77,9 +102,11 @@ Otros comandos: `npm run build` (typecheck + build), `npm test` (vitest), `npm r
 
 Las reglas de Firestore (`firestore.rules`) garantizan que:
 
+- Cada uno lee y escribe **solo su propio** doc de usuario; la colección `users` no se puede listar (el nombre y la foto de la pareja salen de `memberProfiles` del hogar).
 - Solo los **miembros del hogar** leen/escriben sus datos; máximo **2 miembros**.
 - Unirse requiere el **código de invitación** (solo lectura puntual por código exacto, nunca listado).
 - Los **puntos** solo pueden moverse sobre el balance propio, con delta acotado y sin quedar negativos; el historial de canjes es inmutable.
+- Al **salir del hogar** cada uno solo puede sacarse a sí mismo (nunca a su pareja) y el hogar se borra únicamente si quedaba una sola persona.
 
 > Limitación conocida (plan gratuito, sin Cloud Functions): las reglas acotan el delta de puntos pero no pueden verificar transaccionalmente que coincida con los puntos de la tarea completada. Entre dos personas de confianza, el historial es la trazabilidad.
 
