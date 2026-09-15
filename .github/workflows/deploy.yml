@@ -2,8 +2,13 @@
 # Hace lo mismo que correr `npm run build && firebase deploy` en una compu,
 # pero en un servidor de GitHub, así no hace falta la máquina de nadie.
 #
+# Autenticación SIN llaves descargadas (Workload Identity Federation): GitHub
+# le prueba a Google quién es y Google le da un pase que dura minutos. Es lo
+# que exigen las organizaciones con iam.disableServiceAccountKeyCreation.
+#
 # Necesita estos secrets del repo (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT  · el JSON entero de la cuenta de servicio de Google
+#   GCP_WIF_PROVIDER     · projects/<NÚMERO>/locations/global/workloadIdentityPools/github/providers/github
+#   GCP_SERVICE_ACCOUNT  · github-deploy@<project-id>.iam.gserviceaccount.com
 #   VITE_FB_API_KEY, VITE_FB_AUTH_DOMAIN, VITE_FB_PROJECT_ID,
 #   VITE_FB_APP_ID, VITE_FB_SENDER_ID  · los mismos valores del .env.local
 name: Deploy a Firebase
@@ -21,6 +26,10 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Deja que GitHub emita el carnet de identidad que Google verifica
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -44,15 +53,16 @@ jobs:
           VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
           VITE_FB_SENDER_ID: ${{ secrets.VITE_FB_SENDER_ID }}
 
-      - name: Guardar la credencial de Google en un archivo temporal
-        env:
-          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: printf '%s' "$SA_JSON" > "$RUNNER_TEMP/service-account.json"
+      # Canjea el carnet de GitHub por un pase temporal de Google.
+      # Deja GOOGLE_APPLICATION_CREDENTIALS apuntando a ese pase.
+      - name: Autenticarse en Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       # hosting = los archivos de la app · firestore:rules = los permisos de la base
       - name: Publicar hosting y reglas de Firestore
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
         run: >
           npx firebase deploy
           --only hosting,firestore:rules

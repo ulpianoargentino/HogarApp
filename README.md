@@ -60,10 +60,19 @@ La app queda en `https://<project-id>.web.app`.
 necesidad de ninguna computadora. Requiere cargar en **Settings → Secrets and
 variables → Actions** del repo:
 
+Se autentica con **Workload Identity Federation** (sin llaves descargadas: GitHub
+canjea su token OIDC por credenciales temporales de Google). Es lo único que
+funciona en organizaciones con `iam.disableServiceAccountKeyCreation`, la
+restricción que traen por defecto las organizaciones nuevas.
+
 | Secret | De dónde sale |
 |---|---|
-| `FIREBASE_SERVICE_ACCOUNT` | JSON de una cuenta de servicio de Google Cloud con los roles **Firebase Hosting Admin**, **Firebase Rules Admin** y **Service Usage Consumer** |
+| `GCP_WIF_PROVIDER` | `projects/<número de proyecto>/locations/global/workloadIdentityPools/github/providers/github` |
+| `GCP_SERVICE_ACCOUNT` | `github-deploy@<project-id>.iam.gserviceaccount.com`, con los roles **Firebase Hosting Admin**, **Firebase Rules Admin** y **Service Usage Consumer** |
 | `VITE_FB_API_KEY`, `VITE_FB_AUTH_DOMAIN`, `VITE_FB_PROJECT_ID`, `VITE_FB_APP_ID`, `VITE_FB_SENDER_ID` | los mismos valores del `.env.local` |
+
+La cuenta de servicio necesita además **Workload Identity User** otorgado al
+principal `principalSet://iam.googleapis.com/projects/<número>/locations/global/workloadIdentityPools/github/attribute.repository/<owner>/<repo>`.
 
 Publica `hosting` **y** `firestore:rules`: si solo se subiera el hosting, las
 funciones nuevas quedarían bloqueadas por reglas viejas.
