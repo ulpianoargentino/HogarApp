@@ -198,7 +198,7 @@ export default function CalendarPage() {
   return (
     <div>
       <PageHeader title="Calendario" />
-      <div className="px-4 pb-28">
+      <div className="px-4 pb-6">
         <div className="mt-2">
           <MonthGrid
             year={view.year}
